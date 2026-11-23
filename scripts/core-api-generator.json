@@ -1,0 +1,17 @@
+{
+  "generatorName": "typescript-angular",
+  "inputSpec": "docs/api/core-v3.openapi.yaml",
+  "globalProperties": {
+    "apiDocs": "false",
+    "modelDocs": "false",
+    "apiTests": "false",
+    "modelTests": "false"
+  },
+  "additionalProperties": {
+    "ngVersion": "21.2.25",
+    "fileNaming": "kebab-case",
+    "useSingleRequestParameter": true,
+    "disallowAdditionalPropertiesIfNotPresent": false,
+    "nullSafeAdditionalProps": true
+  }
+}

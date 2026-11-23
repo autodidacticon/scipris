@@ -33,8 +33,12 @@ The production build writes static files to `dist/scipris/browser/`. The test
 command runs the Vitest suite once using jsdom.
 
 Run the orchestrator check from the repository root to install from the lockfile,
-build the app, and run tests in CI mode.
+validate and regenerate the CORE client, build the app, and run tests in CI mode.
+The check requires Java 11 or newer for generation.
 
 ```bash
 bash scripts/verify.sh
 ```
+
+See the [CORE API client guide](docs/api-client.md) for generation, proxy
+configuration, and client usage.

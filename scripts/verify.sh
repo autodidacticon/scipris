@@ -7,9 +7,16 @@ export CI=true
 spec=docs/api/core-v3.openapi.yaml
 generated=src/app/core/api/generated
 
-# The API specification can land before the Angular project or its lockfile.
+if [[ -f package-lock.json ]]; then
+  npm ci --no-audit --no-fund
+fi
+
 if [[ -f "$spec" ]]; then
-  npm exec --yes --package=@redocly/cli@2.82.0 -- redocly lint --extends=spec "$spec"
+  if [[ -f package-lock.json ]]; then
+    npm run api:lint
+  else
+    npm exec --yes --package=@redocly/cli@2.82.0 -- redocly lint --extends=spec "$spec"
+  fi
 fi
 
 if [[ -d docs/api ]]; then
@@ -33,9 +40,11 @@ if [[ ! -f package.json && ! -f angular.json && ! -d "$generated" ]]; then
   exit 0
 fi
 
-npm ci --no-audit --no-fund
-
-if [[ -d "$generated" ]]; then
+if [[ -f "$spec" ]] && [[ -f scripts/generate-core-api.mjs ]]; then
+  if [[ ! -d "$generated" ]]; then
+    echo 'Generated client missing. Run npm run api:generate and include its output.' >&2
+    exit 1
+  fi
   snapshot=$(mktemp -d)
   trap 'rm -rf -- "$snapshot"' EXIT
   cp -R -- "$generated" "$snapshot/generated"

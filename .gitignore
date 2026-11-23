@@ -1,6 +1,7 @@
 /node_modules/
 /dist/
 /.angular/cache/
+/.cache/openapi-generator/
 /coverage/
 *.tsbuildinfo
 npm-debug.log*
