@@ -11,8 +11,10 @@
     "api:generate": "node scripts/generate-core-api.mjs",
     "api:lint": "redocly lint --extends=spec docs/api/core-v3.openapi.yaml",
     "start": "ng serve",
+    "nlp:serve": "node scripts/nlp/server.mjs",
     "build": "ng build --configuration production",
-    "test": "ng test --watch=false",
+    "test": "npm run test:nlp && ng test --watch=false",
+    "test:nlp": "node --test scripts/nlp/*.test.mjs",
     "test:api": "ng test --watch=false --include='src/app/core/api/**/*.spec.ts'"
   },
   "dependencies": {

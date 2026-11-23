@@ -1,12 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, throwError } from 'rxjs';
+import { CORE_SEARCH_LIMIT } from '../../../../shared/search-filters.mjs';
 import { rethrowCoreApiError } from './core-api-error';
 import { WorksService, type SearchWorksRequestParams } from './generated/api/works.service';
 import type { WorksAggregationRequest } from './generated/model/works-aggregation-request';
 import type { WorksAggregationResponse } from './generated/model/works-aggregation-response';
 import type { WorksSearchResponse } from './generated/model/works-search-response';
 
-export const CORE_SEARCH_LIMIT = { min: 1, max: 100, default: 10 } as const;
+export { CORE_SEARCH_LIMIT };
 export const CORE_OFFSET_WINDOW = 10_000;
 
 @Injectable({ providedIn: 'root' })

@@ -1,38 +1,106 @@
 <form class="search-form" role="search" aria-label="Research papers" novalidate
-      (submit)="submit($event, queryInput, limitInput)">
-  <div class="fields">
+      (submit)="submit($event)">
+  <div class="fields" [class.nlp-fields]="!drafts.showLimit()">
     <div>
-      <label [for]="idPrefix() + '-query'">Search query</label>
-      <input #queryInput [id]="idPrefix() + '-query'" type="search" name="query" required
-             placeholder="Enter keywords or a Boolean query" autocomplete="off"
-             [attr.aria-invalid]="queryError() || null"
-             [attr.aria-describedby]="idPrefix() + '-query-help' + (queryError() ? ' ' + idPrefix() + '-query-error' : '')"
-             (input)="queryError.set(false)" />
-      @if (queryError()) {
-        <p class="field-error" role="alert" [id]="idPrefix() + '-query-error'">Enter a search query.</p>
-      }
-    </div>
-    <div>
-      <label [for]="idPrefix() + '-limit'">Papers to show</label>
-      <input #limitInput [id]="idPrefix() + '-limit'" type="number" name="limit" required step="1"
-             [min]="limitBounds.min" [max]="limitBounds.max" [value]="limitBounds.default"
-             [attr.aria-invalid]="limitError() || null"
-             [attr.aria-describedby]="limitError() ? idPrefix() + '-limit-error' : idPrefix() + '-limit-help'"
-             (input)="limitError.set(false)" />
-      <span [id]="idPrefix() + '-limit-help'" class="visually-hidden">
-        {{ limitBounds.min }} to {{ limitBounds.max }} papers. Apply the limit by submitting your search.
-      </span>
-      @if (limitError()) {
-        <p class="field-error" role="alert" [id]="idPrefix() + '-limit-error'">
-          Enter a whole number from {{ limitBounds.min }} to {{ limitBounds.max }}.
+      @if (drafts.enabled()) {
+        <label [for]="idPrefix() + '-description'">Describe the papers you want to find</label>
+        <textarea #description [id]="idPrefix() + '-description'" rows="2" maxlength="1000"
+                  [value]="drafts.description()" [attr.aria-describedby]="idPrefix() + '-translate-help'"
+                  (input)="drafts.setDescription(description.value, $event)"
+                  (compositionstart)="drafts.setDescription(description.value, $event)"
+                  (compositionend)="drafts.setDescription(description.value, $event)"></textarea>
+        <p class="query-help draft-help" [id]="idPrefix() + '-translate-help'">
+          Try “Show 5 papers on drone delivery without GPS published from 2020 through 2022.” When you pause typing, OpenRouter drafts a Boolean query.
+          If several interpretations fit, choose one. Edit the query if needed, then select <strong>Search papers</strong>.
         </p>
+        <div role="status" class="draft-status">
+          @if (drafts.pending()) { <p>Finding interpretations…</p> }
+          @else if (drafts.result(); as result) {
+            @if (result.clarification) { <p>{{ result.clarification }}</p> }
+            @else if (result.options.length === 1) {
+              <span class="visually-hidden">Boolean query ready to edit.</span>
+            } @else if (result.options.length > 1 && drafts.selected() === null) {
+              <span class="visually-hidden">{{ result.options.length }} interpretations available. Choose one to edit.</span>
+            }
+          }
+        </div>
+        @if (drafts.error()) { <p class="field-error" role="alert">{{ drafts.error() }}</p> }
+        @if (drafts.result(); as result) {
+          @if (result.options.length > 1) {
+            <label [for]="idPrefix() + '-interpretation'">Interpretation</label>
+            <select #choice [id]="idPrefix() + '-interpretation'" (change)="drafts.choose(+choice.value)">
+              <option value="" disabled [selected]="drafts.selected() === null">Choose an interpretation</option>
+              @for (option of result.options; track $index) {
+                <option [value]="$index" [selected]="drafts.selected() === $index">{{ option.label }}</option>
+              }
+            </select>
+          }
+          @if (drafts.selected() === null && result.unapplied.length) {
+            <p class="draft-note">Outside the proposed search: {{ result.unapplied.join(', ') }}</p>
+          }
+        }
+      }
+      @if (drafts.showEditor()) {
+        <label [for]="idPrefix() + '-query'">{{ drafts.enabled() ? 'Edit Boolean query' : 'Search query' }}</label>
+        <div class="query-field">
+          <div class="query-highlights" aria-hidden="true">
+            <div class="query-highlight-line" [style.left.px]="-queryScroll()" [appQueryHighlight]="drafts.query()"></div>
+          </div>
+          <input #queryInput [id]="idPrefix() + '-query'" type="search" name="query" required
+                 [value]="drafts.query()"
+                 placeholder="Enter keywords or a Boolean query" autocomplete="off"
+                 [attr.aria-invalid]="queryError() || null"
+                 [attr.aria-describedby]="idPrefix() + (drafts.enabled() ? '-translate-help' : '-query-help') + (queryError() ? ' ' + idPrefix() + '-query-error' : '') + (drafts.appliedNotes().length ? ' ' + idPrefix() + '-unapplied' : '')"
+                 (input)="updateQueryHighlight(queryInput)"
+                 (scroll)="queryScroll.set(queryInput.scrollLeft)" />
+        </div>
+        @if (drafts.appliedNotes().length) {
+          <p class="draft-note" [id]="idPrefix() + '-unapplied'">Unapplied in this draft: {{ drafts.appliedNotes().join(', ') }}</p>
+        }
+        @if (queryError()) {
+          <p class="field-error" role="alert" [id]="idPrefix() + '-query-error'">Enter a search query.</p>
+        }
+        @if (!drafts.enabled()) {
+          <p class="query-help" [id]="idPrefix() + '-query-help'">
+            Use <code appQueryHighlight="AND"></code>, <code appQueryHighlight="OR"></code>, or <code appQueryHighlight="NOT"></code>
+            in any case, or use <code appQueryHighlight="&amp;&amp;"></code>, <code appQueryHighlight="||"></code>, or <code appQueryHighlight="!"></code>.
+            Group terms with parentheses, as in <code appQueryHighlight="(drone AND (package OR delivery))"></code>.
+          </p>
+        }
+        <app-publication-date-range [idPrefix]="idPrefix()" [(range)]="drafts.range" />
       }
     </div>
-    <button type="submit">Search papers</button>
+    @if (drafts.showLimit()) {
+      <div>
+        <label [for]="idPrefix() + '-limit'">Papers to show</label>
+        <input #limitInput [id]="idPrefix() + '-limit'" type="number" name="limit" required step="1"
+               [min]="limitBounds.min" [max]="limitBounds.max" [value]="limitValue()"
+               [attr.aria-invalid]="limitError() || null"
+               [attr.aria-describedby]="limitError() ? idPrefix() + '-limit-error' : idPrefix() + '-limit-help'"
+               (input)="editLimit(limitInput.value)" />
+        <span [id]="idPrefix() + '-limit-help'" class="visually-hidden">
+          {{ limitBounds.min }} to {{ limitBounds.max }} papers. Apply the limit by submitting your search.
+        </span>
+        @if (limitError()) {
+          <p class="field-error" role="alert" [id]="idPrefix() + '-limit-error'">
+            Enter a whole number from {{ limitBounds.min }} to {{ limitBounds.max }}.
+          </p>
+        }
+      </div>
+    }
+    <button type="submit" [disabled]="!drafts.showEditor()">Search papers</button>
   </div>
-  <p class="query-help" [id]="idPrefix() + '-query-help'">
-    Use uppercase AND or OR and parentheses, as in <code>(drone AND (package OR delivery))</code>.
-  </p>
+  <div class="draft-panel">
+    <label class="draft-toggle">
+      <input #toggle type="checkbox" role="switch" [checked]="drafts.enabled()" [disabled]="!drafts.available()"
+             [attr.aria-describedby]="drafts.available() === false ? idPrefix() + '-nlp-unavailable' : null"
+             (change)="toggleNlp(toggle.checked)" />
+      Natural language search (NLP)
+    </label>
+    @if (drafts.available() === false) {
+      <p class="query-help" [id]="idPrefix() + '-nlp-unavailable'">Natural language search is unavailable on this server.</p>
+    }
+  </div>
 </form>
 
 @if (state(); as search) {
@@ -43,7 +111,10 @@
         @switch (search.results.status) {
           @case ('loading') { Searching CORE for <strong>{{ search.query }}</strong>… }
           @case ('ready') {
-            @if (search.results.papers.length === 0) {
+            @if (search.dateNotice) {
+              Showing {{ search.results.papers.length | number }} of {{ search.results.total | number }} matches found so far
+              for <strong>{{ search.query }}</strong>. {{ search.dateNotice }}
+            } @else if (search.results.papers.length === 0) {
               No papers found for <strong>{{ search.query }}</strong>.
             } @else {
               Showing {{ search.results.papers.length | number }} of {{ search.results.total | number }}
@@ -102,7 +173,9 @@
             }
             @case ('loading') { Counting papers across the query… }
             @case ('ready') {
-              @if (search.years.coverage.partialReason; as reason) {
+              @if (search.dateNotice) {
+                Year counts cover the {{ search.years.coverage.counted | number }} matches found so far. {{ search.dateNotice }}
+              } @else if (search.years.coverage.partialReason; as reason) {
                 <strong>Partial coverage.</strong>
                 @if (search.years.coverage.counted > 0) {
                   Year counts account for {{ search.years.coverage.counted | number }} of
@@ -113,7 +186,7 @@
                 }
                 {{ reason }}
               } @else if (search.years.coverage.total > 0) {
-                Year counts account for all {{ search.years.coverage.total | number }} matches reported by CORE.
+                Year counts account for all {{ search.years.coverage.total | number }} matches.
               } @else {
                 No matching papers to chart.
               }

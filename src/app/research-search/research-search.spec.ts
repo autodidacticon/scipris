@@ -28,6 +28,8 @@ describe('ResearchSearch', () => {
     fixture = TestBed.createComponent(ResearchSearch);
     fixture.componentRef.setInput('idPrefix', 'papers');
     fixture.detectChanges();
+    http.expectOne({ method: 'GET', url: '/api/nlp/status' }).flush({ enabled: false });
+    fixture.detectChanges();
     root = fixture.nativeElement;
     query = root.querySelector('input[type=search]')!;
     limit = root.querySelector('input[type=number]')!;
@@ -69,6 +71,66 @@ describe('ResearchSearch', () => {
     ]);
   }
 
+  function dates(from: string, through: string) {
+    const fields = root.querySelectorAll<HTMLInputElement>('input[type=date]');
+    for (const [index, value] of [from, through].entries()) {
+      fields[index].value = value;
+      fields[index].dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+    return fields;
+  }
+
+  it('validates calendar bounds and applies an open year range to both CORE requests', () => {
+    const [, end] = dates('2024-01-01', '2023-12-31');
+    submit('solar or wind', '4');
+    expect(document.activeElement).toBe(end);
+    expect(end.getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('[role=alert]')?.textContent).toContain('on or after');
+    http.expectNone(() => true);
+    dates('2024-01-01', '');
+    submit('solar or wind', '4');
+    const q = '(solar OR wind) AND yearPublished>=2024';
+    expectPage(q, 4).flush({ totalHits: 7, results: [] });
+    expectYears(q).flush({ aggregations: { yearPublished: { '2024': 7 } } });
+    dates('', '');
+    submit('solar or wind', '4');
+    expectPage('solar OR wind', 4).flush(emptyPage);
+  });
+
+  it('counts exact-day matches across pages and changes the card limit without scanning again', () => {
+    dates('2024-02-28', '2024-02-29');
+    submit('solar', '1');
+    const q = '(solar) AND yearPublished>=2024 AND yearPublished<=2024';
+    const work = (id: number, day: string | null) => ({
+      id, title: 'Paper ' + id, yearPublished: 2024, publishedDate: day && day + 'T12:30:00+00:00',
+    });
+    expectPage(q, 100).flush({ totalHits: 5, results: [work(1, '2024-02-01'), work(2, null)] });
+    fixture.detectChanges();
+    expect(root.querySelector('.results .status')?.textContent).toContain('Checking publication dates');
+    expectPage(q, 3, 2).flush({ totalHits: 5, results: [work(3, '2024-02-28'), work(4, '2024-02-29'), work(5, '2024-03-01')] });
+    fixture.detectChanges();
+    expect(root.querySelectorAll('.paper')).toHaveLength(1);
+    expect(root.querySelector('.paper h3')?.textContent).toBe('Paper 3');
+    expect(chartRows()).toEqual([['2024', '2']]);
+    expect(root.querySelector('.chart .status')?.textContent).toContain('all 2 matches');
+    submit('solar', '3');
+    expect(root.querySelectorAll('.paper')).toHaveLength(2);
+    http.expectNone(() => true);
+  });
+
+  it('keeps verified day matches and labels an interrupted scan as partial', () => {
+    dates('', '2024-02-29');
+    submit('solar', '7');
+    const q = '(solar) AND yearPublished<=2024';
+    expectPage(q, 100).flush({ totalHits: 3, results: [{ id: 1, yearPublished: 2023 }] });
+    expectPage(q, 2, 1).flush({}, { status: 429, statusText: 'Too many requests' });
+    fixture.detectChanges();
+    expect(root.querySelector('.results .status')?.textContent).toContain('Partial coverage');
+    expect(root.querySelector('.chart .status')?.textContent).toContain('1 of 3 candidate papers');
+    expect(chartRows()).toEqual([['2023', '1']]);
+  });
+
   it('labels native controls and focuses invalid fields before issuing any request', () => {
     expect(query.labels?.[0].textContent).toBe('Search query');
     expect(limit.labels?.[0].textContent).toBe('Papers to show');
@@ -77,6 +139,12 @@ describe('ResearchSearch', () => {
     expect(limit.valueAsNumber).toBe(10);
     expect([limit.min, limit.max, limit.step]).toEqual(['1', '100', '1']);
     expect(root.querySelector('figure')).toBeNull();
+    const nlp = root.querySelector<HTMLInputElement>('input[role=switch]')!;
+    expect(nlp.disabled).toBe(true);
+    expect(nlp.checked).toBe(false);
+    expect(nlp.getAttribute('aria-describedby')).toBe('papers-nlp-unavailable');
+    expect(root.querySelector('#papers-nlp-unavailable')?.textContent).toContain('unavailable');
+    expect(root.querySelector('.draft-help')).toBeNull();
 
     submit('   ', '10');
     expect(document.activeElement).toBe(query);
@@ -117,6 +185,86 @@ describe('ResearchSearch', () => {
     expect(root.querySelectorAll('.paper')).toHaveLength(2);
     expect(chartRows()).toEqual([['2024', '1'], ['2023', '1']]);
     http.expectNone(aggregateUrl);
+  });
+
+  it('highlights mixed-case and symbolic operators and normalizes both CORE requests', () => {
+    const expression = '(drone aNd nOt "say (\\"or\\") && !") oR (BAND&&!delivery||AND* \\NOT \\(literal\\) \\!bang year!=2020 Wow!)';
+    const canonical = '(drone AND NOT "say (\\"or\\") && !") OR (BAND AND NOT delivery OR AND* \\NOT \\(literal\\) \\!bang year!=2020 Wow!)';
+    query.value = expression;
+    query.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+
+    const mirror = root.querySelector('.query-highlights')!;
+    expect(mirror.getAttribute('aria-hidden')).toBe('true');
+    expect(mirror.textContent).toBe(expression);
+    expect(Array.from(mirror.querySelectorAll('.parenthesis, .operator'), (token) =>
+      [token.classList.contains('operator') ? 'operator' : 'parenthesis', token.textContent]))
+      .toEqual([
+        ['parenthesis', '('], ['operator', 'aNd'], ['operator', 'nOt'], ['parenthesis', ')'],
+        ['operator', 'oR'], ['parenthesis', '('], ['operator', '&&'], ['operator', '!'],
+        ['operator', '||'], ['parenthesis', ')'],
+      ]);
+
+    submit(expression, '10');
+    expectPage(canonical, 10).flush({ totalHits: 2, results: [firstPage.results[0]] });
+    expectYears(canonical).flush(yearBuckets);
+    fixture.detectChanges();
+    expect(query.value).toBe(expression);
+    expect(root.querySelector('.results [role=status]')?.textContent).toContain(expression);
+
+    query.value = '"unfinished (AND OR ! && ||';
+    query.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    expect(mirror.querySelector('.operator, .parenthesis, .group')).toBeNull();
+  });
+
+  it('shades the full extent of matched groups and preserves literal and unfinished text', () => {
+    const mirror = root.querySelector('.query-highlight-line')!;
+    const contents = (selector: string) => Array.from(mirror.querySelectorAll(selector), (span) => span.textContent).join('');
+    const group = '(drone OR ("wind ) AND" && rain\\)))';
+    const expression = 'air) AND (open ' + group + ' OR (sun) tail';
+    query.value = expression;
+    query.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(mirror.textContent).toBe(expression);
+    expect(contents('.group')).toBe(group + '(sun)');
+    expect(contents('.peach')).toBe('("wind ) AND" && rain\\))');
+    expect(contents('.group.operator')).toBe('OR&&');
+    expect(contents('.parenthesis:not(.group)')).toBe(')(');
+
+    // Completing the outer group immediately extends its scope and shifts the nested tints.
+    query.value += ') after';
+    query.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(contents('.group')).toBe('(open ' + group + ' OR (sun) tail)');
+    expect(contents('.parenthesis:not(.group)')).toBe(')');
+  });
+
+  it('cycles group colors by depth and restores them across sibling groups', () => {
+    query.value = '(one (two (three (four)))(sibling)) (next)';
+    query.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const mirror = root.querySelector('.query-highlight-line')!;
+    const contents = (tone: string) => Array.from(mirror.querySelectorAll('.' + tone), (part) => part.textContent).join('');
+    expect(contents('mint')).toBe('(one (four))(next)');
+    expect(contents('peach')).toBe('(two )(sibling)');
+    expect(contents('blue')).toBe('(three )');
+  });
+
+  it('renders every search-help example with the same token ranges and classes as the input', () => {
+    const samples = root.querySelectorAll('#papers-query-help code');
+    const texts = Array.from(samples, (sample) => sample.textContent);
+    expect(texts).toEqual(['AND', 'OR', 'NOT', '&&', '||', '!', booleanQuery]);
+    const tokens = (element: Element) => Array.from(element.children, (child) => [child.textContent, child.className]);
+    for (const sample of samples) {
+      query.value = sample.textContent!;
+      query.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(tokens(sample)).toEqual(tokens(root.querySelector('.query-highlight-line')!));
+      expect(sample.querySelector('.operator')).not.toBeNull();
+    }
   });
 
   it('enumerates separate pages to account for missing years and papers outside the display limit', () => {
