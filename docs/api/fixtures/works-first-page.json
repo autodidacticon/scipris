@@ -1,0 +1,32 @@
+{
+  "totalHits": 3,
+  "limit": 2,
+  "offset": 0,
+  "searchId": "fixture-works-001",
+  "results": [
+    {
+      "id": 101,
+      "title": "Drone routing for package delivery",
+      "authors": [{ "name": "Example Author" }],
+      "abstract": "A fictional study of route selection for delivery drones.",
+      "doi": "10.0000/fixture.101",
+      "yearPublished": 2024,
+      "publishedDate": "2024-04-15T00:00:00+00:00",
+      "documentType": "research",
+      "downloadUrl": "https://example.org/papers/101.pdf",
+      "links": [{ "type": "download", "url": "https://example.org/papers/101.pdf" }]
+    },
+    {
+      "id": 102,
+      "title": "Package handoff with a drone",
+      "authors": [],
+      "abstract": null,
+      "doi": null,
+      "yearPublished": null,
+      "publishedDate": null,
+      "documentType": null,
+      "downloadUrl": "",
+      "links": []
+    }
+  ]
+}

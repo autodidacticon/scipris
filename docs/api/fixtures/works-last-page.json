@@ -1,0 +1,14 @@
+{
+  "totalHits": 3,
+  "limit": "2",
+  "offset": 2,
+  "scrollId": null,
+  "results": [
+    {
+      "id": 103,
+      "title": "A drone delivery simulation",
+      "authors": [{ "name": "Sample Researcher" }],
+      "yearPublished": 2023
+    }
+  ]
+}

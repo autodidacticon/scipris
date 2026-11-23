@@ -1,0 +1,68 @@
+# CORE API v3 for Scipris
+
+## Sources and access
+
+Research date **2026-11-22**. CORE identifies the service as **API v3 (3.0.0)**. The base URL is `https://api.core.ac.uk/v3`. CORE's October 2025 documentation update covers Works, query syntax, and aggregation examples. [CORE API service](https://core.ac.uk/services/api), [CORE documentation update](https://oacore.github.io/content/images/pdfs/core-community-newsletter-october-2025-.pdf)
+
+The web research tools returned HTTP 403 for the interactive reference, its “How to search” section, the published OpenAPI JSON, and the attempted anonymous Works search. The CORE homepage also returned 403 on direct retrieval. The service page, CORE team's launch article, and public CORE client source were available through indexed results. The repository copy of the project brief was available locally. [CORE homepage](https://core.ac.uk/), [v3 reference](https://api.core.ac.uk/docs/v3), [How to search](https://api.core.ac.uk/docs/v3#section/How-to-search), [official OpenAPI JSON](https://api.core.ac.uk/swagger/v3.json), [CORE team's v3 launch article](https://research.jiscinvolve.org/wp/2021/07/16/apiv3-announcing-a-new-api-to-access-core-data/), [project brief](../project.md)
+
+[core-v3.openapi.yaml](core-v3.openapi.yaml) is a Scipris-maintained OpenAPI 3.0.3 subset based on that material, publisher client code, and reported wire observations. The official JSON is the preferred upstream contract once it can be fetched and compared. CORE Search can use CORE's internal gateway, so its public source is evidence for request and response shape. Behavior on the public host with this project's key and origin still needs live verification. [CORE Search API transport](https://github.com/oacore/search/blob/main/api/index.js), [CORE Search routes](https://github.com/oacore/search/blob/main/api/search.js)
+
+## Works search and Boolean syntax
+
+`GET /v3/search/works/` retrieves deduplicated Works. A Work can represent multiple repository Outputs. Use Work `id` when counting distinct search results. Example integrations use both trailing-slash and slashless URLs. The contract uses the trailing slash for GET because a slashless request has been reported to redirect. CORE's own web client uses `POST /v3/search/works` with a JSON body, an alternative for long queries. GET serves the app's search flow in this contract. [CORE v3 launch article](https://research.jiscinvolve.org/wp/2021/07/16/apiv3-announcing-a-new-api-to-access-core-data/), [CORE GPT example](https://github.com/oacore/gpt-core/blob/main/core.py), [CORE Search routes](https://github.com/oacore/search/blob/main/api/search.js), [Pipeworx v3 integration](https://github.com/pipeworx-io/mcp-core-research)
+
+- `q` is the search expression. Uppercase `AND` requires both operands and uppercase `OR` accepts either. Parentheses group expressions. Double quotes delimit a phrase. A qualifier such as `title:"drone delivery"` searches a field. CORE's launch example also demonstrates a numeric comparison and `_exists_:fullText`. [CORE team's syntax example](https://research.jiscinvolve.org/wp/2021/07/16/apiv3-announcing-a-new-api-to-access-core-data/#:~:text=A%20fully%20searchable%20dataset), [How to search](https://api.core.ac.uk/docs/v3#section/How-to-search)
+- `limit` sets page size. Available v3 references report a default of 10, a maximum of 100, and zero-based `offset` defaulting to 0. Use an `offset + limit` window no greater than 10,000 as the client guard. CORE documents offset pagination in its launch notes, while the numerical caps are corroborated by integrations and were unmeasured in this review. `totalHits` can exceed the retrievable window. [CORE team's pagination notes](https://research.jiscinvolve.org/wp/2021/07/16/apiv3-announcing-a-new-api-to-access-core-data/), [v3 reference walkthrough](https://enter.scholay.com/en/news/draft-43995e88-ce60-4133-814b-eae4ae7040d4/), [LiveContext integration](https://livecontext.ai/integrations/core), [recorded Works response](https://apisscore.com/api/core/)
+- `scroll=true` starts cursor pagination. Use the previous response's `scrollId` with the same query and page size on the next GET. CORE's sample omits `scroll` and `offset` on continuation and uses `exclude=fullText` on metadata requests. CORE's launch presentation presents scrolling as suitable for roughly 1,000 to 100,000 records and points larger jobs to the Dataset. Treat that range as guidance. Cursor lifetime, current hard ceiling, exhaustion signals, and eligibility by tier are unverified. [CORE scroll example](https://github.com/oacore/gpt-core/blob/main/core.py), [CORE v3 launch presentation](https://www.slideshare.net/slideshow/core-apiv3/251954413)
+- The Works response includes `results` and a reported `totalHits`. `offset`, `limit`, `scrollId`, and `searchId` may accompany them. Captured responses show both integer and numeric-string `limit` values. Paper metadata can be absent or null, and download URLs can be blank. The spec types the fields the app needs and accepts additional provider fields. [CORE GPT example](https://github.com/oacore/gpt-core/blob/main/core.py), [practice app wire example](https://github-wiki-see.page/m/bounswe/bounswe2023group9/wiki/Milestone-2-Report), [recorded Works response](https://apisscore.com/api/core/)
+
+The project query `(drone AND (package OR delivery))` is valid against the operators and grouping in CORE's published syntax. It requires a match for `drone` and for at least one of `package` or `delivery`, including a work that matches all three. A work matching `delivery` alone fails the conjunction. The terms are unqualified and match across searchable fields. CORE's indexing and text analysis determine the actual match set. This verifies the expression's semantics. The live request returned HTTP 403 through the research tool, so this review has no live hit count. [CORE team's syntax example](https://research.jiscinvolve.org/wp/2021/07/16/apiv3-announcing-a-new-api-to-access-core-data/), [How to search](https://api.core.ac.uk/docs/v3#section/How-to-search)
+
+```bash
+curl --get 'https://api.core.ac.uk/v3/search/works/' \
+  --data-urlencode 'q=(drone AND (package OR delivery))' \
+  --data-urlencode 'limit=10' \
+  --data-urlencode 'offset=0' \
+  --data-urlencode 'exclude=fullText'
+```
+
+Pass the raw query to the HTTP client's parameter serializer to perform URL encoding once. For a POST JSON body, send the raw query string.
+
+## Authentication, CORS, rate limits and errors
+
+- CORE offers anonymous access and registration for a key. CORE's example apps use `Authorization: Bearer <key>`. Independent callers report anonymous Works metadata and full text withheld. References also report the `api_key` query parameter. The contract supports anonymous GET and uses bearer authentication for registered calls, including aggregation. Anonymous aggregate access is unverified. Store the registered key server-side and inject the header at request time. [CORE API registration](https://core.ac.uk/services/api), [CORE API transport](https://github.com/oacore/search/blob/main/api/index.js), [v3 reference walkthrough](https://enter.scholay.com/en/news/draft-43995e88-ce60-4133-814b-eae4ae7040d4/)
+- Browser behavior depends on the request origin and headers. An external Works GET on 2026-09-28 reported no `Access-Control-Allow-Origin` header. This review could not test application origins, `OPTIONS` preflight for bearer or JSON requests, or rate-limit header exposure. Address-bar navigation succeeding would only establish that the resource can be loaded. Route Angular requests through a same-origin server that calls CORE, which also keeps the key out of the browser bundle. [Recorded Works CORS observation](https://apisscore.com/api/core/)
+- CORE's service page advertises five single requests or one batch request per 10 seconds. A recent read of the inaccessible v3 reference reports token budgets of 100/day and 10/minute anonymous, 1,000/day and 25/minute for registered personal use, and 5,000/day and 10/minute for registered academic users outside the specified member tiers. Simple requests can cost one token, with complex operations consuming more. These figures differ from the service page summary. The active tier and costs for this project are unverified. Use the response headers and actual account limits when sizing traffic. [CORE service page](https://core.ac.uk/services/api), [v3 rate-limit section](https://api.core.ac.uk/docs/v3#tag/Rate-limits), [dated v3 quota observations](https://fshy.ajam.dev/p/core-ac-uk/)
+- CORE's example handles `429` and reads `X-RateLimit-Retry-After` as a timestamp when supplied. External observations include `X-RateLimit-Limit` and `X-RateLimit-Remaining`. Honor retry guidance with bounded backoff and handle absent headers. CORE's example also handles 5xx. A public Works probe observed a malformed `q` produce HTTP 500 with a JSON `message`, so 5xx can include query failures. The full official operation-specific error list, exact auth and validation statuses, and a stable error envelope remain unverified. The spec declares the evidenced cases and a default for other failures. [CORE search example](https://github.com/oacore/gpt-core/blob/main/core.py), [recorded malformed-query response](https://apisscore.com/api/core/), [recorded throttle headers](https://fshy.ajam.dev/p/core-ac-uk/)
+
+## Complete-query aggregation
+
+Call `POST /v3/search/works/aggregate` with the same `q` as the list and `aggregations: ["yearPublished"]`. The request is independent of the list's `limit` and `offset`. The CORE Search client posts this shape, consumes the raw JSON `aggregations` object, and reads year keys and counts from `aggregations.yearPublished`. Treat the public endpoint's exactness, bucket limit, and missing-year encoding as unverified until confirmed for the app. [CORE aggregation request](https://github.com/oacore/search/blob/main/api/search.js), [CORE request fields](https://github.com/oacore/search/blob/main/store/filters.js), [CORE bucket reader](https://github.com/oacore/search/blob/main/utils/filters-transform.js)
+
+```bash
+curl 'https://api.core.ac.uk/v3/search/works/aggregate' \
+  -H "Authorization: Bearer $CORE_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data '{"q":"(drone AND (package OR delivery))","aggregations":["yearPublished"]}'
+```
+
+1. Verify the year buckets against a small, fully enumerated Works query using distinct IDs, including records with no publication year. Vary the list limit and confirm the chart input is unchanged. On a broad query, check whether buckets are truncated and whether reported totals are exact. Reconcile year counts against the number of matches when the total is known to be exact. Give missing years an explicit bucket only when they are counted or otherwise independently accounted for.
+2. If the endpoint omits coverage the chart needs, run a separate paginated request for metadata and tally one year bucket per distinct Work `id`, including an unknown-year bucket. Use offset within the verified result window and a supported scroll session for larger eligible queries. Require evidence of completion before using that tally, such as exhausting the result set and matching an independently verified exact total. Quota exhaustion, cursor expiry, index changes, and window truncation can prevent complete enumeration.
+3. **Chart requirement to resolve before implementation.** Complete aggregation for arbitrary queries is unproven. If the path cannot establish coverage, surface a chart-unavailable state or an explicitly partial result and raise the scope trade-off with the project owner before shipping. CORE also offers a dated Dataset for bulk analysis, subject to its access terms. Its snapshot can differ from results in the live search index. [CORE data access overview](https://core.ac.uk/services), [CORE terms](https://core.ac.uk/terms)
+
+## Fixtures and validation
+
+The [fixtures](fixtures/) use fictional papers, IDs, and links. `works-first-page.json` and `works-last-page.json` describe one three-work search with a UI limit of two. `works-aggregate-years.json` includes both known years, including 2023 from the last page. Its two counted works versus three search matches exercise the coverage check for a missing year. `works-empty.json` simulates zero matches. `works-error.json` models the observed JSON message field with a sanitized message for an HTTP 500 mock. Mock status and response headers can be set in the consuming test.
+
+The repository's pinned validator is Redocly CLI 2.82.0, with its OpenAPI spec ruleset. `bash scripts/verify.sh` exited 1 in the npm wrapper before linting because the sandbox could not resolve `registry.npmjs.org` (`ENOTFOUND`). Running the script with `npm_config_offline=true` also exited 1 because npm could not find a cached registry response (`ENOTCACHED`). npm also reported that it could not write to `~/.npm/_logs`. The npm step precedes fixture parsing in the script. The cached copy of the same validator ran directly with exit 0 and reported `Your API description is valid.` All five fixtures passed Node JSON parsing and Ajv validation against their response schemas. The Boolean query also round-tripped through URL encoding. This checkout has no Angular project or generated client for the script to check.
+
+```bash
+npm exec --yes --package=@redocly/cli@2.82.0 -- redocly lint --extends=spec docs/api/core-v3.openapi.yaml
+```
+
+The exact offline command used in this workspace was the following.
+
+```bash
+node "$HOME/.npm/_npx/f27dbb041d50e22e/node_modules/@redocly/cli/bin/cli.js" lint --extends=spec docs/api/core-v3.openapi.yaml
+```
