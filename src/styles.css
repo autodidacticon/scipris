@@ -1,0 +1,15 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #172232;
+  background: #f6f8fa;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+.page-width {
+  width: min(64rem, calc(100% - 2rem));
+  margin-inline: auto;
+}
