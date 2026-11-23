@@ -53,7 +53,10 @@ proxy to forward `/api/core/search/works/` and `/api/core/search/works/aggregate
 to the corresponding CORE `/v3` paths. Preserve the query string, method, JSON
 body, upstream status, and retry guidance. Set a server environment variable
 such as `CORE_API_KEY` and have the proxy inject `Authorization: Bearer <key>`
-upstream. The proxy is a deployment prerequisite. A direct browser base URL is
+upstream. `npm start` runs the Angular development proxy configured in
+[`scripts/core-proxy.mjs`](../scripts/core-proxy.mjs) and reads `CORE_API_KEY`
+from the server environment. Configure a proxy separately for a static production
+build. A direct browser base URL is
 suitable only for operations where anonymous access and CORS work for the
 deployed origin. [CORE CORS and auth research](api/core-api.md#authentication-cors-rate-limits-and-errors)
 

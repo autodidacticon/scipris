@@ -1,7 +1,7 @@
 :root {
   font-family: system-ui, sans-serif;
-  color: #172232;
-  background: #f6f8fa;
+  color: #1d2638;
+  background: #f6f7fb;
   line-height: 1.5;
 }
 
@@ -10,6 +10,6 @@ body {
 }
 
 .page-width {
-  width: min(64rem, calc(100% - 2rem));
+  width: min(72rem, calc(100% - 2rem));
   margin-inline: auto;
 }

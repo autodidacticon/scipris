@@ -1,0 +1,145 @@
+<form class="search-form" role="search" aria-label="Research papers" novalidate
+      (submit)="submit($event, queryInput, limitInput)">
+  <div class="fields">
+    <div>
+      <label [for]="idPrefix() + '-query'">Search query</label>
+      <input #queryInput [id]="idPrefix() + '-query'" type="search" name="query" required
+             placeholder="Enter keywords or a Boolean query" autocomplete="off"
+             [attr.aria-invalid]="queryError() || null"
+             [attr.aria-describedby]="idPrefix() + '-query-help' + (queryError() ? ' ' + idPrefix() + '-query-error' : '')"
+             (input)="queryError.set(false)" />
+      @if (queryError()) {
+        <p class="field-error" role="alert" [id]="idPrefix() + '-query-error'">Enter a search query.</p>
+      }
+    </div>
+    <div>
+      <label [for]="idPrefix() + '-limit'">Papers to show</label>
+      <input #limitInput [id]="idPrefix() + '-limit'" type="number" name="limit" required step="1"
+             [min]="limitBounds.min" [max]="limitBounds.max" [value]="limitBounds.default"
+             [attr.aria-invalid]="limitError() || null"
+             [attr.aria-describedby]="limitError() ? idPrefix() + '-limit-error' : idPrefix() + '-limit-help'"
+             (input)="limitError.set(false)" />
+      <span [id]="idPrefix() + '-limit-help'" class="visually-hidden">
+        {{ limitBounds.min }} to {{ limitBounds.max }} papers. Apply the limit by submitting your search.
+      </span>
+      @if (limitError()) {
+        <p class="field-error" role="alert" [id]="idPrefix() + '-limit-error'">
+          Enter a whole number from {{ limitBounds.min }} to {{ limitBounds.max }}.
+        </p>
+      }
+    </div>
+    <button type="submit">Search papers</button>
+  </div>
+  <p class="query-help" [id]="idPrefix() + '-query-help'">
+    Use uppercase AND or OR and parentheses, as in <code>(drone AND (package OR delivery))</code>.
+  </p>
+</form>
+
+@if (state(); as search) {
+  <div class="search-output">
+    <section class="results" [attr.aria-labelledby]="idPrefix() + '-results'">
+      <h2 [id]="idPrefix() + '-results'">Papers</h2>
+      <p class="status" role="status">
+        @switch (search.results.status) {
+          @case ('loading') { Searching CORE for <strong>{{ search.query }}</strong>… }
+          @case ('ready') {
+            @if (search.results.papers.length === 0) {
+              No papers found for <strong>{{ search.query }}</strong>.
+            } @else {
+              Showing {{ search.results.papers.length | number }} of {{ search.results.total | number }}
+              matches for <strong>{{ search.query }}</strong>.
+            }
+          }
+        }
+      </p>
+
+      @switch (search.results.status) {
+        @case ('error') {
+          <p class="notice error" role="alert">
+            Could not load papers for <strong>{{ search.query }}</strong>.
+            {{ search.results.message }} Check your query or try again.
+          </p>
+        }
+        @case ('ready') {
+          @if (search.results.papers.length) {
+            <ul class="papers" role="list">
+              @for (paper of search.results.papers; track paper.id) {
+                <li>
+                  <article class="paper">
+                    <h3>{{ paper.title }}</h3>
+                    <p class="metadata">
+                      <span>{{ paper.authors }}</span><span>{{ paper.year ?? 'Year unavailable' }}</span>
+                    </p>
+                    <p class="abstract">{{ paper.abstract ?? 'No abstract available.' }}</p>
+                    <div class="paper-links">
+                      <a [href]="'https://core.ac.uk/works/' + paper.id"
+                         [attr.aria-label]="'View on CORE, ' + paper.title">View on CORE</a>
+                      @if (paper.fullText; as url) {
+                        <a [href]="url" [attr.aria-label]="'Full text, ' + paper.title">Full text</a>
+                      }
+                    </div>
+                  </article>
+                </li>
+              }
+            </ul>
+          }
+        }
+      }
+    </section>
+
+    <section class="chart" [attr.aria-labelledby]="idPrefix() + '-years'">
+      <h2 [id]="idPrefix() + '-years'">Publication years</h2>
+      <figure>
+        <figcaption>Number of matching CORE papers by publication year.</figcaption>
+        <p class="status" role="status">
+          @switch (search.years.status) {
+            @case ('waiting') {
+              @if (search.results.status === 'error') {
+                Publication year counts are unavailable until the search succeeds.
+              } @else {
+                Waiting for CORE’s match count.
+              }
+            }
+            @case ('loading') { Counting papers across the query… }
+            @case ('ready') {
+              @if (search.years.coverage.partialReason; as reason) {
+                <strong>Partial coverage.</strong>
+                @if (search.years.coverage.counted > 0) {
+                  Year counts account for {{ search.years.coverage.counted | number }} of
+                  {{ search.years.coverage.total | number }} matches reported by CORE.
+                } @else {
+                  Year counts could not be verified for the {{ search.years.coverage.total | number }}
+                  matches reported by CORE.
+                }
+                {{ reason }}
+              } @else if (search.years.coverage.total > 0) {
+                Year counts account for all {{ search.years.coverage.total | number }} matches reported by CORE.
+              } @else {
+                No matching papers to chart.
+              }
+            }
+          }
+        </p>
+
+        @if (search.years.status === 'error') {
+          <p class="notice error" role="alert">Publication year counts unavailable. {{ search.years.message }}</p>
+        }
+        @if (search.years.status === 'ready' && search.years.coverage.buckets.length) {
+          <dl class="bars" aria-label="Publication year counts">
+            @for (bucket of search.years.coverage.buckets; track bucket.year) {
+              <div class="bar-row">
+                <dt>{{ bucket.year ?? 'Unknown year' }}</dt>
+                <dd>
+                  <span class="bar-track" aria-hidden="true">
+                    <span class="bar" [style.width.%]="100 * bucket.count / search.years.maxCount"></span>
+                  </span>
+                  <span>{{ bucket.count | number }}</span>
+                </dd>
+              </div>
+            }
+          </dl>
+        }
+      </figure>
+    </section>
+  </div>
+}

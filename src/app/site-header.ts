@@ -11,9 +11,10 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   `,
   styles: `
     header {
-      border-bottom: 1px solid #dce2e8;
+      border-bottom: 1px solid #d9dfea;
       background: #fff;
       padding-block: 1rem;
+      color: #352887;
       font-weight: 700;
     }
   `,

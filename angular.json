@@ -36,7 +36,8 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "options": {
-            "buildTarget": "scipris:build:development"
+            "buildTarget": "scipris:build:development",
+            "proxyConfig": "scripts/core-proxy.mjs"
           }
         },
         "test": {
