@@ -14,6 +14,9 @@
 - [x] 2.6 Provide an editable publication date range. Apply dates to papers and full-query counts and verify coverage, mode switching, and submission.
 - [x] 2.7 Show the editable NLP limiter after interpretation and verify overrides, resets and manual-mode retention.
 - [x] 2.8 Resolve rolling publication windows against the request date. Check both picker bounds, previous calendar years, leap days and study-population wording.
+- [x] 2.9 Group the result limit and publication dates below the query in a collapsible section. Verify keyboard operation, responsive layout, retained values and validation in both modes.
+- [x] 2.10 Resolve equivalent rolling-period wording and verify that the correlation query opens with both publication bounds.
+- [x] 2.11 On a parsing service failure, show the Boolean editor and a warning. Verify manual submission and recovery.
 
 ## 3. Integration
 

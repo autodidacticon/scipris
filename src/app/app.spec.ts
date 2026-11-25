@@ -13,10 +13,10 @@ describe('Application shell', () => {
     await fixture.whenStable();
 
     const shell: HTMLElement = fixture.nativeElement;
-    expect(shell.querySelector('header')?.textContent?.trim()).toBe('Mini Cypris');
+    expect(shell.querySelector('header')?.textContent?.trim()).toBe('Scipris');
 
     const main = shell.querySelector('main[aria-labelledby="research-title"]');
-    expect(main?.querySelector('h1#research-title')?.textContent?.trim()).toBe('Research search');
+    expect(main?.querySelector('h1#research-title')?.textContent?.trim()).toBe('CORE search');
     expect(main?.querySelector('p')?.textContent?.trim()).toBe('Explore scientific papers from CORE.');
     expect(main?.querySelector('app-research-search form[role="search"]')).not.toBeNull();
   });

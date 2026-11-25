@@ -7,7 +7,6 @@
 }
 
 .search-form,
-.paper,
 .chart {
   border: 1px solid var(--border);
   border-radius: 0.875rem;
@@ -21,13 +20,32 @@
 
 .fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 9.5rem auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: start;
 }
 
-.nlp-fields {
-  grid-template-columns: minmax(0, 1fr) auto;
+.search-filters {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.search-filters summary {
+  padding: 0.75rem 0;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1.5rem;
+}
+
+.result-limit {
+  width: 9.5rem;
+  max-width: 100%;
 }
 
 label {
@@ -118,6 +136,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 button:focus-visible,
+summary:focus-visible,
 a:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
@@ -138,7 +157,7 @@ a:focus-visible {
   margin: 0;
 }
 
-.draft-toggle input {
+.draft-toggle input, .switch-track {
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -155,7 +174,7 @@ a:focus-visible {
   cursor: inherit;
 }
 
-.draft-toggle input::before {
+.draft-toggle input::before, .switch-track::before {
   content: '';
   width: 0.875rem;
   height: 0.875rem;
@@ -163,7 +182,7 @@ a:focus-visible {
   background: currentColor;
 }
 
-.draft-toggle input:checked {
+.draft-toggle input:checked, .analytics-switch[aria-checked=true] .switch-track {
   justify-content: flex-end;
   background: var(--accent);
 }
@@ -219,6 +238,15 @@ button:disabled {
   color: #77440b;
 }
 
+.draft-warning {
+  margin: .75rem 0;
+  padding: .625rem .875rem;
+  border-inline-start: 3px solid #9b641d;
+  background: #fff6e6;
+  color: #69400c;
+  font-size: .875rem;
+}
+
 .query-help,
 .field-error {
   margin: 0.75rem 0 0;
@@ -249,14 +277,22 @@ button:disabled {
   white-space: nowrap;
 }
 
-.search-output {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  align-items: start;
-  gap: clamp(1rem, 3vw, 2rem);
-  margin-top: 2rem;
-  overflow-wrap: anywhere;
+.search-output { margin-top: 1.5rem; overflow-wrap: anywhere; }
+.output-tabs { display: flex; gap: .25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+.output-tabs button {
+  margin: 0; padding: .5rem 1rem; min-height: 2.625rem; border: 0;
+  border-bottom: 3px solid transparent; border-radius: .4rem .4rem 0 0;
+  background: transparent; color: var(--muted);
 }
+.output-tabs button[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--accent); }
+.output-tabs button:hover { background: #eeedf8; }
+[role="tabpanel"]:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.aggregate-picker fieldset { padding: 0; margin: 0; border: 0; }
+.field-choices, .analytics-grid { display: grid; gap: .5rem 1rem; }
+.field-choices { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.field-choices label { display: flex; gap: .5rem; align-items: center; margin: 0; min-height: 2rem; cursor: pointer; }
+.field-choices input { width: 1.1rem; height: 1.1rem; min-height: 0; margin: 0; accent-color: var(--accent); }
+.analytics-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr)); align-items: start; margin-top: 1rem; }
 
 h2,
 h3 {
@@ -273,8 +309,7 @@ h3 {
   font-size: 1.125rem;
 }
 
-.status,
-figcaption {
+.status {
   margin: 0.5rem 0 1rem;
   color: var(--muted);
   font-size: 0.875rem;
@@ -291,97 +326,43 @@ figcaption {
   background: #fff5f6;
 }
 
-.papers {
-  display: grid;
-  gap: 0.75rem;
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  background: white;
+}
+.paper-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  font-size: .9375rem;
+}
+.paper-table thead { background: #f1f0fa; }
+.paper-table th { padding: .625rem .75rem; text-align: start; }
+.paper-table th:first-child { width: 48%; }
+.paper-table th:last-child { width: 1%; }
+.year-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: .375rem;
+  min-height: 2rem;
   margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.paper {
-  background: #fff;
-  padding: clamp(1rem, 2vw, 1.375rem);
-}
-
-.metadata,
-.paper-links {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 1rem;
-  row-gap: 0.25rem;
-}
-
-.metadata {
-  margin: 0.4375rem 0 0;
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-.abstract {
-  margin-block: 0.75rem;
-}
-
-.paper-links a {
+  border: 0;
+  padding: .125rem .25rem;
+  background: transparent;
   color: var(--accent);
-  font-weight: 650;
-  text-underline-offset: 0.15em;
+  white-space: nowrap;
+}
+.year-sort:hover { background: #e5e2f4; }
+@media (max-width: 35rem) {
+  .paper-table th { padding: .4rem; }
+  .year-sort { white-space: normal; }
 }
 
 .chart {
   padding: clamp(1rem, 2.5vw, 1.375rem);
   background: #f1f0fa;
-}
-
-figure,
-.bars,
-dd {
-  margin: 0;
-}
-
-.bars {
-  display: grid;
-  gap: 0.625rem;
-  padding-top: 0.875rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.bar-row,
-.bar-row dd {
-  display: grid;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-.bar-row {
-  grid-template-columns: 6rem minmax(0, 1fr);
-}
-
-.bar-row dd {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.bar-track,
-.bar {
-  display: block;
-  height: 0.625rem;
-  border-radius: 0.25rem;
-}
-
-.bar-track {
-  background: #dddaee;
-}
-
-.bar {
-  background: var(--accent);
-}
-
-@media (max-width: 47rem) {
-  .search-output {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 35rem) {
@@ -390,11 +371,16 @@ dd {
     gap: 0.75rem;
   }
 
-  .fields input[type='number'] {
-    max-width: 9.5rem;
-  }
-
   button {
     margin-top: 0;
   }
 }
+
+.analytics-switch {
+  display: inline-flex; align-items: center; gap: .5rem; background: transparent; color: var(--ink);
+  border: 0; padding: .25rem 0; margin: 0 0 .5rem;
+}
+.analytics-switch:hover { background: transparent; color: var(--accent); }
+.aggregate-picker fieldset:disabled { color: var(--muted); }
+.date-pager { display: flex; align-items: center; justify-content: end; gap: .75rem; margin-top: .75rem; }
+.date-pager button { margin: 0; }

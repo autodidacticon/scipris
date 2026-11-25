@@ -90,11 +90,10 @@ which can exceed the offset window. For cursor pagination, start with
 `scroll: true` and continue with the returned `scrollId` and the same query and
 page size. Omit `offset` and `scroll` on continuation.
 
-Read year counts from `response.aggregations.yearPublished`. The aggregation
-call takes no display limit or offset. Verify bucket coverage and missing years
-as described in the [aggregation research](api/core-api.md#complete-query-aggregation)
-before labeling it a complete distribution. If necessary, the typed search
-operations support a separate paginated tally of distinct Work IDs.
+Read each selected distribution from `response.aggregations[field]`. The aggregate
+request takes the same CORE query and accepts multiple fields. An empty array
+can represent a field with no buckets. The verified field list is in the
+[aggregation notes](api/core-api.md#complete-query-aggregation).
 
 HTTP or JSON decoding failures reach the subscription's error handler as
 `CoreApiError`. Read `status` for quota failures (`429`), network or browser

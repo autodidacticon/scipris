@@ -42,6 +42,8 @@ export interface SearchWorksRequestParams {
     limit?: number;
     /** Zero-based offset. Keep offset plus limit within the 10,000-work result window. */
     offset?: number;
+    /** Comma-separated FIELD_NAME:asc or FIELD_NAME:desc clauses. The results table orders by yearPublished, then id. */
+    sort?: string;
     /** Set true to start a scroll search. Omit when sending a continuation scrollId. */
     scroll?: boolean;
     /** Opaque cursor from the previous response. Reuse the original query and page size, and omit offset. */
@@ -62,7 +64,7 @@ export class WorksService extends BaseService {
 
     /**
      * Group matching works by field
-     * Send the same query used for the results list. This operation takes no display limit or page offset. Verify bucket limits and missing-value handling before presenting results as a complete distribution.
+     * Send the same query used for the results list. This operation takes no display limit or page offset. Counts describe the buckets CORE returns.
      * @endpoint post /search/works/aggregate
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -149,6 +151,7 @@ export class WorksService extends BaseService {
         }
         const limit = requestParameters?.limit;
         const offset = requestParameters?.offset;
+        const sort = requestParameters?.sort;
         const scroll = requestParameters?.scroll;
         const scrollId = requestParameters?.scrollId;
         const exclude = requestParameters?.exclude;
@@ -177,6 +180,15 @@ export class WorksService extends BaseService {
             localVarQueryParameters,
             'offset',
             <any>offset,
+            QueryParamStyle.Form,
+            true,
+        );
+
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'sort',
+            <any>sort,
             QueryParamStyle.Form,
             true,
         );

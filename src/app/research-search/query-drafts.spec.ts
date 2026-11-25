@@ -66,7 +66,7 @@ describe('Natural-language drafting in ResearchSearch', () => {
   }
 
   function choose(index: number) {
-    const select = root.querySelector('select')!;
+    const select = root.querySelector<HTMLSelectElement>('form select')!;
     select.value = String(index);
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -77,19 +77,24 @@ describe('Natural-language drafting in ResearchSearch', () => {
     const limiter = () => root.querySelector<HTMLInputElement>('input[name=limit]');
     const ranges = () => Array.from(root.querySelectorAll<HTMLInputElement>('input[type=date]'));
     input(limiter()!, '18');
+    const filters = root.querySelector('details')!;
     switchMode();
+    expect(filters.hidden).toBe(true);
     expect(limiter()).toBeNull();
-    translate('5 papers on lightweight drones or robots from 2020 to 2022').flush({
-      ...ambiguous, filters: { limit: 5, publishedFrom: '2020-01-01', publishedTo: '2022-12-31' },
+    translate('5 papers on lightweight drones or robots, 3 per page, from 2020 to 2022').flush({
+      ...ambiguous, filters: { limit: 5, pageSize: 3, publishedFrom: '2020-01-01', publishedTo: '2022-12-31' },
     });
     fixture.detectChanges();
     expect(search().disabled).toBe(true);
+    expect(filters.hidden).toBe(false);
     expect(limiter()?.value).toBe('5');
     input(limiter()!, '7');
-    choose(0);
     expect(ranges().map(field => field.value)).toEqual(['2020-01-01', '2022-12-31']);
     input(ranges()[0], '2021-01-01');
+    filters.open = false;
+    choose(0);
     choose(1);
+    expect(filters.open).toBe(false);
     expect(limiter()?.value).toBe('7');
     expect(ranges()[0].value).toBe('2021-01-01');
     input(query(), 'drone||robot');
@@ -98,7 +103,7 @@ describe('Natural-language drafting in ResearchSearch', () => {
     const page = http.expectOne(req => req.method === 'GET');
     const q = '(drone OR robot) AND yearPublished>=2021 AND yearPublished<=2022';
     const params = new URL(page.request.urlWithParams, 'https://example.test').searchParams;
-    expect(params.get('limit')).toBe('7');
+    expect(params.get('limit')).toBe('3');
     expect(params.get('q')).toBe(q);
     page.flush({ totalHits: 8, results: [] });
     const aggregate = http.expectOne('/api/core/search/works/aggregate');
@@ -111,11 +116,14 @@ describe('Natural-language drafting in ResearchSearch', () => {
       filters: { limit: null, publishedFrom: null, publishedTo: null },
     });
     fixture.detectChanges();
-    expect(limiter()?.value).toBe('10');
-    input(limiter()!, '101');
+    expect(limiter()?.value).toBe('100');
+    expect(root.querySelector<HTMLInputElement>('input[name=pageSize]')?.value).toBe('10');
+    expect(filters.open).toBe(false);
+    input(limiter()!, '10001');
     search().click();
     fixture.detectChanges();
     expect(limiter()?.getAttribute('aria-invalid')).toBe('true');
+    expect(filters.open).toBe(true);
     http.expectNone(() => true);
     expect(ranges().map(field => field.value)).toEqual(['', '']);
     switchMode();
@@ -130,20 +138,21 @@ describe('Natural-language drafting in ResearchSearch', () => {
     expect(prompt()).toBeNull();
     switchMode();
     expect(query()).toBeNull();
-    expect(root.querySelector('select')).toBeNull();
+    expect(root.querySelector<HTMLSelectElement>('form select')).toBeNull();
     expect(root.querySelector('.translate')).toBeNull();
     expect(search().disabled).toBe(true);
     const help = root.querySelector('.draft-help')!;
     expect(prompt().getAttribute('aria-describedby')).toBe(help.id);
-    expect(help.textContent).toContain('pause typing');
-    expect(help.textContent).toContain('OpenRouter');
+    expect(help.textContent).toContain('Find papers from the last decade correlating depression and cardiovascular exercise, group by publication year and publisher');
+    expect(help.textContent).toContain('If several interpretations fit, choose one.');
+    expect(help.textContent).not.toContain('OpenRouter');
 
     translate('Peer-reviewed studies of drones excluding GPS').flush({
       options: [{ label: 'Drones excluding GPS', expression: '(drones AND NOT GPS)' }],
       unapplied: ['Peer-review status'], clarification: '',
     });
     fixture.detectChanges();
-    expect(root.querySelector('select')).toBeNull();
+    expect(root.querySelector<HTMLSelectElement>('form select')).toBeNull();
     expect(root.textContent).not.toContain('Drones excluding GPS');
     expect(query().labels?.[0].textContent).toBe('Edit Boolean query');
     expect(query().value).toBe('(drones AND NOT GPS)');
@@ -216,10 +225,12 @@ describe('Natural-language drafting in ResearchSearch', () => {
     available();
     input(query(), 'manual');
     switchMode();
-    translate('Lightweight drones or robots').flush(ambiguous);
+    translate('Lightweight drones or robots grouped by publication year').flush({
+      ...ambiguous, filters: { aggregations: ['yearPublished'] },
+    });
     fixture.detectChanges();
     expect(query()).toBeNull();
-    const choices = root.querySelector('select')!;
+    const choices = root.querySelector<HTMLSelectElement>('form select')!;
     expect(choices.value).toBe('');
     expect(Array.from(choices.options, option => option.textContent)).toEqual([
       'Choose an interpretation', ...ambiguous.options.map(option => option.label),
@@ -235,20 +246,37 @@ describe('Natural-language drafting in ResearchSearch', () => {
     expect(query().value).toBe('drones&&robots');
     vi.advanceTimersByTime(2000);
     http.expectNone(() => true);
+    root.querySelector<HTMLInputElement>('.aggregate-picker [value=authors]')!.click();
     search().click();
     const page = http.expectOne((req) => req.url === '/api/core/search/works/');
     expect(new URL(page.request.urlWithParams, 'https://example.test').searchParams.get('q')).toBe('drones AND robots');
     page.flush({ totalHits: 1, results: [] });
     const years = http.expectOne('/api/core/search/works/aggregate');
-    expect(years.request.body.q).toBe('drones AND robots');
+    expect(years.request.body).toEqual({ q: 'drones AND robots', aggregations: ['yearPublished', 'authors'] });
     years.flush({ aggregations: { yearPublished: { '2024': 1 } } });
 
     input(prompt(), 'different topic');
-    expect(root.querySelector('select')).toBeNull();
+    expect(root.querySelector<HTMLSelectElement>('form select')).toBeNull();
     expect(query()).toBeNull();
     expect(search().disabled).toBe(true);
     switchMode();
     expect(query().value).toBe('drones&&robots');
+  });
+
+  it('keeps the global switch off when an NLP draft requests aggregations', () => {
+    available();
+    root.querySelector<HTMLButtonElement>('.analytics-switch')!.click();
+    switchMode();
+    translate('Solar papers grouped by language').flush({
+      options: [{ label: 'Solar', expression: 'solar' }], unapplied: [], clarification: '',
+      filters: { aggregations: ['language'] },
+    });
+    fixture.detectChanges();
+    expect(root.querySelector<HTMLInputElement>('[value=language]')?.checked).toBe(true);
+    expect(root.querySelector<HTMLFieldSetElement>('.aggregate-picker fieldset')?.disabled).toBe(true);
+    search().click();
+    http.expectOne(req => req.url === '/api/core/search/works/').flush({ totalHits: 0, results: [] });
+    http.expectNone('/api/core/search/works/aggregate');
   });
 
   it('keeps the manual query available through clarification and failures and retries after editing', () => {
@@ -258,14 +286,18 @@ describe('Natural-language drafting in ResearchSearch', () => {
     translate('interesting papers').flush({ options: [], unapplied: [], clarification: 'Which research topic?' });
     fixture.detectChanges();
     expect(root.querySelector('.draft-status')?.textContent).toContain('Which research topic?');
-    expect(root.querySelector('select')).toBeNull();
+    expect(query()).toBeNull();
+    expect(root.querySelector<HTMLSelectElement>('form select')).toBeNull();
     expect(root.querySelector('input[name=limit]')).toBeNull();
     for (const [status, message] of [[429, 'limit'], [504, 'timed out'], [502, 'Could not translate']] as const) {
       translate('robotics').flush({}, { status, statusText: 'Unavailable' });
       fixture.detectChanges();
-      expect(root.querySelector('[role=alert]')?.textContent).toContain(message);
+      const warning = root.querySelector<HTMLElement>('[role=alert]')!;
+      expect(warning.textContent).toContain(message);
+      expect(query().getAttribute('aria-describedby')?.split(' ')).toContain(warning.id);
       expect(prompt().value).toBe('robotics');
-      expect(search().disabled).toBe(true);
+      expect(query().value).toBe('original');
+      expect(search().disabled).toBe(false);
     }
     switchMode();
     expect(query().value).toBe('original');
@@ -274,5 +306,33 @@ describe('Natural-language drafting in ResearchSearch', () => {
     fixture.detectChanges();
     expect(query().value).toBe('robotics');
     expect(root.querySelector('[role=alert]')).toBeNull();
+  });
+
+  it('opens a blank Boolean editor on the first failed parse and submits a manual query with its filters', () => {
+    available();
+    switchMode();
+    translate('Find solar papers').flush({}, { status: 503, statusText: 'Unavailable' });
+    fixture.detectChanges();
+    expect(toggle().checked).toBe(true);
+    expect(query().value).toBe('');
+    expect(root.querySelector('[role=alert]')?.textContent).toContain('Boolean query');
+    search().click();
+    fixture.detectChanges();
+    expect(query().getAttribute('aria-invalid')).toBe('true');
+    http.expectNone(() => true);
+
+    input(query(), 'solar and wind');
+    input(root.querySelector<HTMLInputElement>('input[name=limit]')!, '3');
+    expect(root.querySelector('.query-highlights .operator')?.textContent).toBe('and');
+    search().click();
+    const page = http.expectOne(req => req.url === '/api/core/search/works/');
+    const params = new URL(page.request.urlWithParams, 'https://example.test').searchParams;
+    expect(params.get('q')).toBe('solar AND wind');
+    expect(params.get('limit')).toBe('3');
+    page.flush({ totalHits: 0, results: [] });
+    const analytics = http.expectOne('/api/core/search/works/aggregate');
+    expect(analytics.request.body.q).toBe('solar AND wind');
+    analytics.flush({ aggregations: {} });
+    http.expectNone(endpoint);
   });
 });

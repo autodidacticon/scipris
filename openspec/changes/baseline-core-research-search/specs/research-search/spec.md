@@ -2,9 +2,17 @@
 
 ## Purpose
 
-Let users find and browse research papers from CORE in the Mini Cypris application.
+Let users find and browse research papers from CORE in Scipris.
 
 ## ADDED Requirements
+
+### Requirement: Search page name
+The application SHALL use “CORE search” as its page name.
+
+#### Scenario: Open the search page
+- **WHEN** the page opens
+- **THEN** its main heading and browser tab title both read “CORE search”
+- **AND** the site header reads “Scipris”
 
 ### Requirement: Boolean paper search
 The application SHALL provide a labeled search input and preserve the terms, operators, and grouping in a submitted Boolean query when retrieving CORE papers.
@@ -19,7 +27,7 @@ The application SHALL provide a labeled search input and preserve the terms, ope
 - **THEN** the app identifies the invalid field and sends no search request
 
 ### Requirement: Adjustable result limit
-The application SHALL let the user submit an integer result limit from 1 to 100, defaulting to 10, and apply it to both paper retrieval and presentation.
+The application SHALL let the user submit a whole-number total result limit from 1 to 10,000 (default 100) and a whole-number page size from 1 to 100 (default 10), and apply them to paper retrieval and presentation.
 
 #### Scenario: Submit a new limit
 - **WHEN** the user changes the limit to 5 and resubmits the current query

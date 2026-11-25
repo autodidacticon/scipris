@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { createServer } from 'node:http';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer, get } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
-import { translate, validateTranslation } from './openrouter.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
+import { translate, validateTranslation } from './translation.mjs';
 import { createDraftHandler } from './server.mjs';
 
 const env = { NLP_ENABLED: 'true', OPENROUTER_API_KEY: 'fixture-only', OPENROUTER_MODEL: 'fixture/model' };
-const emptyFilters = { limit: null, publishedFrom: null, publishedTo: null };
+const emptyFilters = { aggregations: null, limit: null, pageSize: null, publishedFrom: null, publishedTo: null };
 const one = (tree, label = 'Drone research') => ({ options: [{ label, tree }], unapplied: [], clarification: '', filters: emptyFilters });
 const completion = (result) => Response.json({
   choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(result) } }],
@@ -19,16 +23,17 @@ async function service(t, settings) {
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = 'http://127.0.0.1:' + server.address().port + '/api/nlp/';
   return {
-    status: () => fetch(base + 'status').then((res) => res.json()),
-    post: (description) => fetch(base + 'translate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description }),
+    base,
+    status: (headers) => fetch(base + 'status', { headers }).then((res) => res.json()),
+    post: (description, headers, signal) => fetch(base + 'translate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ description }), signal,
     }),
   };
 }
 
 test('translates through OpenRouter with strict structured output and protects the scope of modifiers', async (t) => {
   const result = {
-    clarification: '', unapplied: ['Peer-review status'], filters: { limit: 5, publishedFrom: '2020-02-29', publishedTo: null },
+    clarification: '', unapplied: ['Peer-review status'], filters: { aggregations: null, limit: 5, pageSize: null, publishedFrom: '2020-02-29', publishedTo: null },
     options: [
       { label: 'Both subjects are lightweight', tree: { and: ['lightweight', { or: ['drones', 'robots'] }] } },
       { label: 'Only drones are lightweight', tree: { or: [{ and: ['lightweight', 'drones'] }, 'robots'] } },
@@ -71,7 +76,7 @@ test('quotes phrases and reserved syntax as literals and renders exclusions', ()
 
 test('requires valid publication days, ordered bounds and an in-range display limit', () => {
   for (const invalid of [
-    { limit: 0 }, { limit: 101 }, { limit: 1.5 }, { publishedFrom: '2023-02-29' },
+    { limit: 0 }, { limit: 10001 }, { pageSize: 101 }, { pageSize: 0 }, { limit: 1.5 }, { publishedFrom: '2023-02-29' },
     { publishedTo: '2024-02-30' }, { publishedTo: '0000-01-01' },
     { publishedFrom: '2025-01-01', publishedTo: '2024-12-31' },
   ]) {
@@ -80,7 +85,7 @@ test('requires valid publication days, ordered bounds and an in-range display li
     assert.deepEqual(result.filters, emptyFilters);
     assert.match(result.clarification, /How many papers|Which publication dates/);
   }
-  const filters = { limit: 100, publishedFrom: null, publishedTo: '2024-02-29' };
+  const filters = { aggregations: null, limit: 250, pageSize: 10, publishedFrom: null, publishedTo: '2024-02-29' };
   assert.deepEqual(validateTranslation({ ...one('drones'), filters }).filters, filters);
 });
 
@@ -91,9 +96,9 @@ test('resolves relative publication bounds against the UTC date of the request',
     ['last_month', '2024-02-01', '2024-02-29'],
     ['yesterday', '2024-02-29', '2024-02-29'],
   ]) {
-    const filters = { limit: 3, publishedFrom: period, publishedTo: period };
+    const filters = { aggregations: null, limit: 3, pageSize: null, publishedFrom: period, publishedTo: period };
     assert.deepEqual(validateTranslation({ ...one('drones'), filters }, now).filters,
-      { limit: 3, publishedFrom: start, publishedTo: end });
+      { aggregations: null, limit: 3, pageSize: null, publishedFrom: start, publishedTo: end });
   }
 });
 
@@ -102,10 +107,10 @@ test('resolves rolling publication windows through the UTC request day and leave
   async function filtersFor(description, from, to = null) {
     const draft = one('exercise');
     draft.filters = { ...draft.filters, publishedFrom: from, publishedTo: to };
-    return (await translate(description, { fetchImpl: async () => completion(draft) })).filters;
+    return (await translate(description, async () => draft)).filters;
   }
   const report = 'Find papers within the last year that correlate cardiovascular exercise and depression.';
-  const rolling = { limit: null, publishedFrom: '2025-11-23', publishedTo: '2026-11-23' };
+  const rolling = { aggregations: null, limit: null, pageSize: null, publishedFrom: '2025-11-23', publishedTo: '2026-11-23' };
   assert.deepEqual(await filtersFor(report, 'within the last year'), rolling);
   assert.deepEqual(await filtersFor('Studies from the past twelve months on exercise.', 'from the past twelve months'), rolling);
   assert.deepEqual(await filtersFor('Studies on people who exercised within the last year.', null), emptyFilters);
@@ -114,7 +119,37 @@ test('resolves rolling publication windows through the UTC request day and leave
     { ...rolling, publishedTo: '2026-09-30' });
   t.mock.timers.setTime(new Date('2024-02-29T12:00:00Z').getTime());
   assert.deepEqual(await filtersFor(report, 'within the last year'),
-    { limit: null, publishedFrom: '2023-02-28', publishedTo: '2024-02-29' });
+    { aggregations: null, limit: null, pageSize: null, publishedFrom: '2023-02-28', publishedTo: '2024-02-29' });
+});
+
+test('keeps a correlation draft when the provider paraphrases its rolling publication window', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-11-24T18:00:00Z') });
+  const prompt = 'Find research papers from the last year that correlate depression and cardiovascular exercise';
+  const draft = one({ and: ['depression', 'cardiovascular exercise'] }, 'Depression and cardiovascular exercise');
+  const parse = (period) => translate(prompt, async () => ({
+    ...draft, filters: { ...emptyFilters, publishedFrom: period, publishedTo: period },
+  }));
+  for (const period of ['within the last year', 'rolling_12_months', 'over the past twelve months']) {
+    const result = await parse(period);
+    assert.deepEqual(result.options, [{ label: draft.options[0].label, expression: '(depression AND "cardiovascular exercise")' }]);
+    assert.equal(result.clarification, '');
+    assert.equal(result.filters.publishedFrom, '2025-11-24');
+    assert.equal(result.filters.publishedTo, '2026-11-24');
+  }
+  for (const period of ['within the past two years', 'past 2 years', 'rolling_24_months', 'within the last year before 2000']) {
+    assert.match((await parse(period)).clarification, /Which publication dates/);
+  }
+});
+
+test('validates grouping dimensions independently of the keyword tree', () => {
+  for (const aggregations of [null, [], ['yearPublished', 'language']]) {
+    const result = validateTranslation({ ...one('solar'), filters: { ...emptyFilters, aggregations } });
+    assert.deepEqual(result.filters.aggregations, aggregations);
+    assert.equal(result.options[0].expression, 'solar');
+  }
+  for (const aggregations of [['title'], ['authors', 'authors'], 'language']) {
+    assert.throws(() => validateTranslation({ ...one('solar'), filters: { ...emptyFilters, aggregations } }));
+  }
 });
 
 test('rejects malformed or unbounded results as a whole', () => {
@@ -130,10 +165,105 @@ test('rejects malformed or unbounded results as a whole', () => {
 });
 
 test('disabled flag or missing key prevents any provider call', async (t) => {
-  for (const settings of [{ ...env, NLP_ENABLED: 'false' }, { NLP_ENABLED: 'true' }]) {
+  for (const settings of [{ ...env, NLP_ENABLED: 'false' }, { NLP_ENABLED: 'true' }, { ...env, NLP_PROVIDER: 'unknown' }]) {
     const api = await service(t, { env: settings, fetchImpl: () => assert.fail('unexpected provider call') });
     assert.deepEqual(await api.status(), { enabled: false, debounceMs: 1000 });
     assert.equal((await api.post('drones')).status, 404);
+  }
+});
+
+async function fixtureCli(t, provider) {
+  const bin = await mkdtemp(join(tmpdir(), 'scipris-test-bin-'));
+  t.after(() => rm(bin, { recursive: true, force: true }));
+  const script = `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (['login', 'auth'].includes(args[0])) {
+  const loggedIn = !fs.existsSync(process.env.HOME + '/signed-out');
+  console.log(JSON.stringify({ loggedIn }));
+  process.exit(loggedIn ? 0 : 1);
+}
+const { description } = JSON.parse(fs.readFileSync(0, 'utf8'));
+fs.writeFileSync(process.env.HOME + '/call.json', JSON.stringify({
+  args, description, cwd: process.cwd(), inheritedKey: process.env.OPENROUTER_API_KEY, pid: process.pid
+}));
+if (description === 'invalid') console.log('{}');
+else if (description === 'oversized') console.log('x'.repeat(33000));
+else if (description === 'slow') setInterval(() => {}, 1000);
+else console.log(${JSON.stringify(JSON.stringify(one({ and: ['solar', { not: 'lithium' }] })))});
+`;
+  await writeFile(join(bin, provider), script, { mode: 0o700 });
+  return { NLP_ENABLED: 'true', NLP_PROVIDER: provider, NLP_MODEL: 'local/model', HOME: bin, PATH: bin };
+}
+
+for (const provider of ['codex', 'claude']) {
+  test(provider + ' drafts locally with an existing login and validates the result', async (t) => {
+    const settings = await fixtureCli(t, provider);
+    if (provider === 'claude') settings.OPENROUTER_API_KEY = 'unused-fixture';
+    const api = await service(t, { env: settings, fetchImpl: () => assert.fail('unexpected OpenRouter request') });
+    assert.equal((await api.status()).enabled, true);
+    const description = 'Solar papers without lithium; echo "research"';
+    const response = await api.post(description);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).options[0].expression, '(solar AND NOT lithium)');
+    const call = JSON.parse(await readFile(join(settings.HOME, 'call.json'), 'utf8'));
+    assert.equal(call.description, description);
+    assert.equal(call.args.includes(description), false);
+    assert.ok(call.args.includes('local/model'));
+    assert.ok(call.args.includes(provider === 'codex' ? '--ephemeral' : '--no-session-persistence'));
+    assert.equal(call.inheritedKey, undefined);
+    await assert.rejects(readFile(join(call.cwd, 'response-schema.json')), { code: 'ENOENT' });
+    for (const invalid of ['invalid', 'oversized']) assert.equal((await api.post(invalid)).status, 502);
+    await writeFile(join(settings.HOME, 'signed-out'), '');
+    assert.equal((await api.status()).enabled, false);
+  });
+}
+
+test('CLI selection fails closed on missing binaries and on remote requests', async (t) => {
+  const settings = await fixtureCli(t, 'claude');
+  const missing = await service(t, { env: { ...settings, NLP_PROVIDER: 'codex', OPENROUTER_API_KEY: 'fixture' } });
+  assert.equal((await missing.status()).enabled, false);
+  const local = await service(t, { env: settings });
+  const foreignOrigin = { Origin: 'https://remote.example' };
+  assert.equal((await local.status(foreignOrigin)).enabled, false);
+  assert.equal((await local.post('drones', foreignOrigin)).status, 404);
+  // fetch supplies its own Host. Use node:http to exercise the actual Host header.
+  const [response] = await once(get(local.base + 'status', { headers: { Host: 'remote.example' } }), 'response');
+  const chunks = [];
+  for await (const chunk of response) chunks.push(chunk);
+  assert.equal(JSON.parse(Buffer.concat(chunks)).enabled, false);
+  await assert.rejects(readFile(join(settings.HOME, 'call.json')), { code: 'ENOENT' });
+});
+
+test('terminates a stalled CLI at the drafting deadline', async (t) => {
+  const settings = await fixtureCli(t, 'codex');
+  const api = await service(t, { env: settings, timeoutMs: 500 });
+  assert.equal((await api.post('slow')).status, 504);
+  const { pid } = JSON.parse(await readFile(join(settings.HOME, 'call.json'), 'utf8'));
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+});
+
+test('cancels a CLI draft when the browser disconnects', async (t) => {
+  const settings = await fixtureCli(t, 'claude');
+  const api = await service(t, { env: settings });
+  const client = new AbortController();
+  const request = api.post('slow', {}, client.signal);
+  const deadline = AbortSignal.timeout(3000);
+  let pid;
+  try {
+    while (!pid) {
+      await delay(10, undefined, { signal: deadline });
+      try { pid = JSON.parse(await readFile(join(settings.HOME, 'call.json'), 'utf8')).pid; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+  } finally {
+    client.abort();
+    await assert.rejects(request, { name: 'AbortError' });
+  }
+  while (true) {
+    try { process.kill(pid, 0); }
+    catch (error) { assert.equal(error.code, 'ESRCH'); break; }
+    await delay(10, undefined, { signal: deadline });
   }
 });
 

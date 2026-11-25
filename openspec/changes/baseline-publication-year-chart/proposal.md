@@ -1,5 +1,7 @@
 # Proposal
 
+Historical implementation record. [Selectable Works analytics](../selectable-work-analytics/proposal.md) supersedes the original coverage checks.
+
 ## Why
 
 Step 6 of the [original project brief](../../../docs/project.md) requests a chart over every paper matching the query. The shipped app charts publication years and reports the coverage it can establish, including a visible partial state when CORE's response cannot be reconciled.

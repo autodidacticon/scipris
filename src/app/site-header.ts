@@ -6,7 +6,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header>
-      <div class="page-width">Mini Cypris</div>
+      <div class="page-width">Scipris</div>
     </header>
   `,
   styles: `

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, input, model, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, input, linkedSignal, model, signal, viewChild } from '@angular/core';
 import { isCalendarDate } from '../../../shared/search-filters.mjs';
 import type { PublicationRange } from './publication-range';
 
@@ -25,7 +25,7 @@ import type { PublicationRange } from './publication-range';
       @if (error()) { <p role="alert" [id]="errorId()">{{ error() }}</p> }
     </fieldset>`,
   styles: `
-    :host { display: block; margin-top: 1rem; }
+    :host { display: block; min-width: 0; max-width: 100%; }
     fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
     legend { padding: 0; font-size: .875rem; font-weight: 700; }
     .dates { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin-top: .375rem; }
@@ -41,17 +41,16 @@ export class PublicationDateRange {
   readonly idPrefix = input.required<string>();
   readonly range = model.required<PublicationRange>();
   protected readonly errorId = computed(() => this.idPrefix() + '-date-error');
-  protected readonly error = signal('');
+  protected readonly error = linkedSignal({ source: this.range, computation: () => '' });
   protected readonly invalidField = signal<'from' | 'to'>('to');
   private readonly from = viewChild.required<ElementRef<HTMLInputElement>>('from');
   private readonly to = viewChild.required<ElementRef<HTMLInputElement>>('to');
 
   protected edit(field: keyof PublicationRange, value: string) {
-    this.error.set('');
     this.range.update(range => ({ ...range, [field]: value }));
   }
 
-  validate(): boolean {
+  validate(): HTMLInputElement | undefined {
     for (const key of ['from', 'to'] as const) {
       const field = this[key]().nativeElement;
       const value = this.range()[key];
@@ -59,11 +58,10 @@ export class PublicationDateRange {
       if (!field.validity.valid || (value && !isCalendarDate(value)) || reversed) {
         this.invalidField.set(key);
         this.error.set(reversed ? 'The end date must be on or after the start date.' : 'Enter a valid publication date.');
-        field.focus();
-        return false;
+        return field;
       }
     }
     this.error.set('');
-    return true;
+    return undefined;
   }
 }

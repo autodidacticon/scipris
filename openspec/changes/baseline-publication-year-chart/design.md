@@ -1,5 +1,7 @@
 # Design
 
+Historical implementation record. [Selectable Works analytics](../selectable-work-analytics/proposal.md) supersedes the original coverage checks.
+
 ## Context
 
 The existing paper list and publication-year chart share the same submitted query. The display limit can change while the query is active.

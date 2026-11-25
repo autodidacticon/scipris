@@ -1,0 +1,22 @@
+@use '@angular/material' as mat;
+
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1d2638;
+  background: #f6f7fb;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+.page-width {
+  width: min(72rem, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+mat-paginator {
+  @include mat.theme((color: mat.$violet-palette, typography: (plain-family: system-ui, brand-family: system-ui), density: 0));
+  @include mat.paginator-overrides((container-background-color: transparent, container-text-size: .875rem));
+}

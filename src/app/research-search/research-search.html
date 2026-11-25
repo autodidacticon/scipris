@@ -1,6 +1,6 @@
 <form class="search-form" role="search" aria-label="Research papers" novalidate
       (submit)="submit($event)">
-  <div class="fields" [class.nlp-fields]="!drafts.showLimit()">
+  <div class="fields">
     <div>
       @if (drafts.enabled()) {
         <label [for]="idPrefix() + '-description'">Describe the papers you want to find</label>
@@ -10,7 +10,7 @@
                   (compositionstart)="drafts.setDescription(description.value, $event)"
                   (compositionend)="drafts.setDescription(description.value, $event)"></textarea>
         <p class="query-help draft-help" [id]="idPrefix() + '-translate-help'">
-          Try “Show 5 papers on drone delivery without GPS published from 2020 through 2022.” When you pause typing, OpenRouter drafts a Boolean query.
+          Try “Find papers from the last decade correlating depression and cardiovascular exercise, group by publication year and publisher”.
           If several interpretations fit, choose one. Edit the query if needed, then select <strong>Search papers</strong>.
         </p>
         <div role="status" class="draft-status">
@@ -24,7 +24,11 @@
             }
           }
         </div>
-        @if (drafts.error()) { <p class="field-error" role="alert">{{ drafts.error() }}</p> }
+        @if (drafts.error(); as warning) {
+          <p class="draft-warning" role="alert" [id]="idPrefix() + '-draft-warning'">
+            <strong>{{ warning }}</strong> Enter or review the Boolean query below to search. Edit the description to retry.
+          </p>
+        }
         @if (drafts.result(); as result) {
           @if (result.options.length > 1) {
             <label [for]="idPrefix() + '-interpretation'">Interpretation</label>
@@ -50,7 +54,7 @@
                  [value]="drafts.query()"
                  placeholder="Enter keywords or a Boolean query" autocomplete="off"
                  [attr.aria-invalid]="queryError() || null"
-                 [attr.aria-describedby]="idPrefix() + (drafts.enabled() ? '-translate-help' : '-query-help') + (queryError() ? ' ' + idPrefix() + '-query-error' : '') + (drafts.appliedNotes().length ? ' ' + idPrefix() + '-unapplied' : '')"
+                 [attr.aria-describedby]="idPrefix() + (drafts.enabled() ? (drafts.error() ? '-draft-warning' : '-translate-help') : '-query-help') + (queryError() ? ' ' + idPrefix() + '-query-error' : '') + (drafts.appliedNotes().length ? ' ' + idPrefix() + '-unapplied' : '')"
                  (input)="updateQueryHighlight(queryInput)"
                  (scroll)="queryScroll.set(queryInput.scrollLeft)" />
         </div>
@@ -67,29 +71,58 @@
             Group terms with parentheses, as in <code appQueryHighlight="(drone AND (package OR delivery))"></code>.
           </p>
         }
-        <app-publication-date-range [idPrefix]="idPrefix()" [(range)]="drafts.range" />
       }
     </div>
-    @if (drafts.showLimit()) {
-      <div>
-        <label [for]="idPrefix() + '-limit'">Papers to show</label>
-        <input #limitInput [id]="idPrefix() + '-limit'" type="number" name="limit" required step="1"
-               [min]="limitBounds.min" [max]="limitBounds.max" [value]="limitValue()"
-               [attr.aria-invalid]="limitError() || null"
-               [attr.aria-describedby]="limitError() ? idPrefix() + '-limit-error' : idPrefix() + '-limit-help'"
-               (input)="editLimit(limitInput.value)" />
-        <span [id]="idPrefix() + '-limit-help'" class="visually-hidden">
-          {{ limitBounds.min }} to {{ limitBounds.max }} papers. Apply the limit by submitting your search.
-        </span>
-        @if (limitError()) {
-          <p class="field-error" role="alert" [id]="idPrefix() + '-limit-error'">
-            Enter a whole number from {{ limitBounds.min }} to {{ limitBounds.max }}.
-          </p>
-        }
-      </div>
-    }
     <button type="submit" [disabled]="!drafts.showEditor()">Search papers</button>
   </div>
+  <details #filters class="search-filters" open [hidden]="!drafts.showFilters()">
+    <summary>Search parameters</summary>
+    @if (drafts.showFilters()) {
+      <div class="filter-fields">
+        <app-publication-date-range [idPrefix]="idPrefix()" [(range)]="drafts.range" />
+        <div class="result-limit">
+          <label [for]="idPrefix() + '-limit'">Total results</label>
+          <input #limitInput [id]="idPrefix() + '-limit'" type="number" name="limit" required step="1"
+                 [min]="limitBounds.min" [max]="limitBounds.max" [value]="limitValue()"
+                 [attr.aria-invalid]="limitError() || null"
+                 [attr.aria-describedby]="limitError() ? idPrefix() + '-limit-error' : idPrefix() + '-limit-help'"
+                 (input)="editLimit(limitInput.value)" />
+          <span [id]="idPrefix() + '-limit-help'" class="visually-hidden">
+            {{ limitBounds.min }} to {{ limitBounds.max }} papers. Apply the limit by submitting your search.
+          </span>
+          @if (limitError()) {
+            <p class="field-error" role="alert" [id]="idPrefix() + '-limit-error'">
+              Enter a whole number from {{ limitBounds.min }} to {{ limitBounds.max }}.
+            </p>
+          }
+        </div>
+        <div class="result-limit">
+          <label [for]="idPrefix() + '-page-size'">Results per page</label>
+          <input #pageSizeInput [id]="idPrefix() + '-page-size'" name="pageSize" type="number" required step="1"
+                 [min]="pageBounds.min" [max]="pageBounds.max" [value]="pageSizeValue()"
+                 [attr.aria-invalid]="pageSizeError() || null" [attr.aria-describedby]="pageSizeError() ? idPrefix() + '-size-error' : null"
+                 (input)="editPageSize(pageSizeInput.value)" />
+          @if (pageSizeError()) {
+            <p class="field-error" role="alert" [id]="idPrefix() + '-size-error'">Enter a whole number from 1 to 100.</p>
+          }
+        </div>
+      </div>
+    }
+  </details>
+  <details class="search-filters aggregate-picker">
+    <summary>Analytics parameters</summary>
+    <button class="analytics-switch" type="button" role="switch" [attr.aria-checked]="analyticsEnabled()"
+            (click)="toggleAnalytics()"><span aria-hidden="true" class="switch-track"></span>Enable analytics</button>
+    <fieldset [disabled]="!analyticsEnabled()">
+      <legend class="visually-hidden">Fields to include in Analytics</legend>
+      <div class="field-choices">
+        @for (field of aggregateFields; track field) {
+          <label><input #choice type="checkbox" [value]="field" [checked]="selectedFields().includes(field)"
+                        (change)="chooseField(field, choice.checked)" />{{ aggregateLabels[field] }}</label>
+        }
+      </div>
+    </fieldset>
+  </details>
   <div class="draft-panel">
     <label class="draft-toggle">
       <input #toggle type="checkbox" role="switch" [checked]="drafts.enabled()" [disabled]="!drafts.available()"
@@ -103,23 +136,32 @@
   </div>
 </form>
 
-@if (state(); as search) {
-  <div class="search-output">
-    <section class="results" [attr.aria-labelledby]="idPrefix() + '-results'">
+<div class="search-output">
+  <div role="tablist" aria-label="Search output" class="output-tabs" (keydown)="tabKey($event, resultsTab, analyticsTab)">
+    <button #resultsTab role="tab" type="button" [id]="idPrefix() + '-results-tab'" [attr.aria-controls]="idPrefix() + '-results-panel'"
+            [attr.aria-selected]="tab() === 'results'" [tabIndex]="tab() === 'results' ? 0 : -1" (click)="tab.set('results')">Results</button>
+    <button #analyticsTab role="tab" type="button" [id]="idPrefix() + '-analytics-tab'" [attr.aria-controls]="idPrefix() + '-analytics-panel'"
+            [attr.aria-selected]="tab() === 'analytics'" [tabIndex]="tab() === 'analytics' ? 0 : -1" (click)="tab.set('analytics')">Analytics</button>
+  </div>
+  <section role="tabpanel" class="results" tabindex="0" [id]="idPrefix() + '-results-panel'"
+           [attr.aria-labelledby]="idPrefix() + '-results-tab'" [hidden]="tab() !== 'results'">
+    @if (state(); as search) {
       <h2 [id]="idPrefix() + '-results'">Papers</h2>
       <p class="status" role="status">
         @switch (search.results.status) {
           @case ('loading') { Searching CORE for <strong>{{ search.query }}</strong>… }
           @case ('ready') {
-            @if (search.dateNotice) {
-              Showing {{ search.results.papers.length | number }} of {{ search.results.total | number }} matches found so far
-              for <strong>{{ search.query }}</strong>. {{ search.dateNotice }}
-            } @else if (search.results.papers.length === 0) {
-              No papers found for <strong>{{ search.query }}</strong>.
+            @if (search.results.papers.length) {
+              Showing {{ search.results.start + 1 | number }}–{{ search.results.start + search.results.papers.length | number }}
+              of {{ search.results.total | number }} matches{{ search.results.dateNotice ? ' found so far' : '' }} for <strong>{{ search.query }}</strong>.
+              @if (search.results.available < search.results.total) { Browsing the first {{ search.results.available | number }}. }
+            } @else if (search.results.dateNotice) {
+              No matching papers found so far.
             } @else {
-              Showing {{ search.results.papers.length | number }} of {{ search.results.total | number }}
-              matches for <strong>{{ search.query }}</strong>.
+              No papers found for <strong>{{ search.query }}</strong>.
             }
+            {{ search.results.dateNotice }}
+            @if (search.results.loadingIndex !== undefined) { Loading page {{ search.results.loadingIndex + 1 }}… }
           }
         }
       </p>
@@ -133,86 +175,82 @@
         }
         @case ('ready') {
           @if (search.results.papers.length) {
-            <ul class="papers" role="list">
-              @for (paper of search.results.papers; track paper.id) {
-                <li>
-                  <article class="paper">
-                    <h3>{{ paper.title }}</h3>
-                    <p class="metadata">
-                      <span>{{ paper.authors }}</span><span>{{ paper.year ?? 'Year unavailable' }}</span>
-                    </p>
-                    <p class="abstract">{{ paper.abstract ?? 'No abstract available.' }}</p>
-                    <div class="paper-links">
-                      <a [href]="'https://core.ac.uk/works/' + paper.id"
-                         [attr.aria-label]="'View on CORE, ' + paper.title">View on CORE</a>
-                      @if (paper.fullText; as url) {
-                        <a [href]="url" [attr.aria-label]="'Full text, ' + paper.title">Full text</a>
-                      }
-                    </div>
-                  </article>
-                </li>
-              }
-            </ul>
+            <div class="table-scroll">
+              <table class="paper-table" aria-label="Paper results">
+                <thead>
+                  <tr>
+                    <th scope="col">Title</th>
+                    <th scope="col">Authors</th>
+                    <th scope="col" [attr.aria-sort]="search.results.page.order === 'desc' ? 'descending' : 'ascending'">
+                      <button type="button" class="year-sort" (click)="toggleYearOrder(search.results.page)">
+                        Year published <span aria-hidden="true">{{ search.results.page.order === 'desc' ? '↓' : '↑' }}</span>
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                @for (paper of search.results.papers; track paper.id) {
+                  <tbody appPaperRow [paper]="paper" [idPrefix]="idPrefix()"></tbody>
+                }
+              </table>
+            </div>
+          }
+          @if (search.results.pageError) {
+            <div class="notice error" role="alert">{{ search.results.pageError }} <button type="button" (click)="retryPage()">Retry page</button></div>
+          }
+          @if (search.results.moreDatePages !== undefined) {
+            @if (search.results.moreDatePages || search.results.page.index) {
+              <nav class="date-pager" aria-label="Paper result pages">
+                <button type="button" aria-label="Previous page" [disabled]="!search.results.page.index || search.results.loadingIndex !== undefined"
+                        (click)="goToPage(search.results.page, search.results.page.index - 1)">Previous</button>
+                <span>Page {{ search.results.page.index + 1 }}</span>
+                <button type="button" aria-label="Next page" [disabled]="!search.results.moreDatePages || search.results.loadingIndex !== undefined"
+                        (click)="goToPage(search.results.page, search.results.page.index + 1)">Next</button>
+              </nav>
+            }
+          } @else if (search.results.available > search.results.page.pageSize || search.results.page.index) {
+            <mat-paginator aria-label="Paper result pages" [hidePageSize]="true" [length]="search.results.available"
+                           [pageSize]="search.results.page.pageSize" [pageIndex]="search.results.loadingIndex ?? search.results.page.index"
+                           [disabled]="search.results.loadingIndex !== undefined" (page)="goToPage(search.results.page, $event.pageIndex)" />
           }
         }
       }
-    </section>
-
-    <section class="chart" [attr.aria-labelledby]="idPrefix() + '-years'">
-      <h2 [id]="idPrefix() + '-years'">Publication years</h2>
-      <figure>
-        <figcaption>Number of matching CORE papers by publication year.</figcaption>
-        <p class="status" role="status">
-          @switch (search.years.status) {
-            @case ('waiting') {
-              @if (search.results.status === 'error') {
-                Publication year counts are unavailable until the search succeeds.
-              } @else {
-                Waiting for CORE’s match count.
-              }
-            }
-            @case ('loading') { Counting papers across the query… }
-            @case ('ready') {
-              @if (search.dateNotice) {
-                Year counts cover the {{ search.years.coverage.counted | number }} matches found so far. {{ search.dateNotice }}
-              } @else if (search.years.coverage.partialReason; as reason) {
-                <strong>Partial coverage.</strong>
-                @if (search.years.coverage.counted > 0) {
-                  Year counts account for {{ search.years.coverage.counted | number }} of
-                  {{ search.years.coverage.total | number }} matches reported by CORE.
+    } @else {
+      <p class="status">Submit a search to see matching papers.</p>
+    }
+  </section>
+  <section role="tabpanel" class="analytics" tabindex="0" [id]="idPrefix() + '-analytics-panel'"
+           [attr.aria-labelledby]="idPrefix() + '-analytics-tab'" [hidden]="tab() !== 'analytics'">
+    @if (state(); as search) {
+      <h2>Analytics for {{ search.query }}</h2>
+      @if (search.analytics.status !== 'disabled' && search.bounds; as bounds) {
+        <p class="status">CORE groups by full publication years ({{ bounds.first }}–{{ bounds.last }}). Results uses your exact dates.</p>
+      }
+      @switch (search.analytics.status) {
+        @case ('disabled') { <p class="status">{{ analyticsEnabled() ? 'Submit the search to load analytics.' : 'Analytics is off.' }}</p> }
+        @case ('loading') { <p class="status" role="status">Loading analytics…</p> }
+        @case ('error') { <p class="notice error" role="alert">Could not load analytics. {{ search.analytics.message }}</p> }
+        @case ('ready') {
+          <div class="analytics-grid">
+            @for (group of search.analytics.groups; track group.field) {
+              <article class="chart">
+                <h3>{{ aggregateLabels[group.field] }}</h3>
+                @if (!group.buckets.length) {
+                  <p class="status">CORE returned no buckets for this field.</p>
                 } @else {
-                  Year counts could not be verified for the {{ search.years.coverage.total | number }}
-                  matches reported by CORE.
+                  <app-work-distribution [group]="group" [canSelect]="drafts.showFilters()"
+                                         (rangeSelected)="setPublicationRange($event)" />
                 }
-                {{ reason }}
-              } @else if (search.years.coverage.total > 0) {
-                Year counts account for all {{ search.years.coverage.total | number }} matches.
-              } @else {
-                No matching papers to chart.
-              }
+              </article>
+            } @empty {
+              <p class="status">Select an aggregation field and submit the search to see analytics.</p>
             }
-          }
-        </p>
-
-        @if (search.years.status === 'error') {
-          <p class="notice error" role="alert">Publication year counts unavailable. {{ search.years.message }}</p>
+          </div>
         }
-        @if (search.years.status === 'ready' && search.years.coverage.buckets.length) {
-          <dl class="bars" aria-label="Publication year counts">
-            @for (bucket of search.years.coverage.buckets; track bucket.year) {
-              <div class="bar-row">
-                <dt>{{ bucket.year ?? 'Unknown year' }}</dt>
-                <dd>
-                  <span class="bar-track" aria-hidden="true">
-                    <span class="bar" [style.width.%]="100 * bucket.count / search.years.maxCount"></span>
-                  </span>
-                  <span>{{ bucket.count | number }}</span>
-                </dd>
-              </div>
-            }
-          </dl>
-        }
-      </figure>
-    </section>
-  </div>
-}
+      }
+    } @else if (!analyticsEnabled()) {
+      <p class="status">Analytics is off.</p>
+    } @else {
+      <p class="status">Submit a search to see its analytics.</p>
+    }
+  </section>
+</div>

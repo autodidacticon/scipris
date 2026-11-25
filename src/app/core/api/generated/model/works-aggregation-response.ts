@@ -7,9 +7,9 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { WorksAggregationResponseAggregations } from './works-aggregation-response-aggregations';
+import { BucketCounts } from './bucket-counts';
 
 
 export interface WorksAggregationResponse {
-    aggregations: WorksAggregationResponseAggregations;
+    aggregations: { [key: string]: BucketCounts | undefined; };
 }

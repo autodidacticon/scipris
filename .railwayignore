@@ -1,0 +1,11 @@
+.git
+.agents
+.codex
+.env*
+node_modules
+dist
+.angular
+.cache
+coverage
+docs/project.pdf
+*.log

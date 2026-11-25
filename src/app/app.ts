@@ -10,7 +10,7 @@ import { SiteHeader } from './site-header';
   template: `
     <app-site-header />
     <main class="page-width" aria-labelledby="research-title">
-      <h1 id="research-title">Research search</h1>
+      <h1 id="research-title">CORE search</h1>
       <p>Explore scientific papers from CORE.</p>
       <app-research-search />
     </main>

@@ -15,7 +15,7 @@ export interface WorksAggregationRequest {
      */
     q: string;
     /**
-     * Fields to group by. The CORE Search client uses yearPublished and documentType, among others.
+     * Works fields to group by in one request.
      */
     aggregations: Array<string>;
 }

@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, Injectable, computed, inject, linkedSignal, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Subscription, catchError, of, switchMap, timer } from 'rxjs';
-import { CORE_SEARCH_LIMIT } from '../core/api';
+import { CORE_SEARCH_LIMIT, TOTAL_RESULTS, type AggregateField } from '../../../shared/search-filters.mjs';
 import type { PublicationRange } from './publication-range';
 
 interface DraftSettings {
@@ -11,7 +11,7 @@ interface DraftSettings {
 }
 
 interface Translation {
-  filters?: { limit: number | null; publishedFrom: string | null; publishedTo: string | null };
+  filters?: { aggregations?: AggregateField[] | null; pageSize?: number | null; limit: number | null; publishedFrom: string | null; publishedTo: string | null };
   options: { label: string; expression: string }[];
   clarification: string;
   unapplied: string[];
@@ -32,13 +32,14 @@ export class QueryDrafts {
   readonly query = signal('');
   readonly range = signal<PublicationRange>({ from: '', to: '' });
   readonly result = signal<Translation | undefined>(undefined);
-  readonly draftLimit = linkedSignal(() => String(this.result()?.filters?.limit ?? CORE_SEARCH_LIMIT.default));
-  readonly showLimit = computed(() => !this.enabled() || !!this.result()?.options.length);
+  readonly draftLimit = linkedSignal(() => String(this.result()?.filters?.limit ?? TOTAL_RESULTS.default));
+  readonly draftPageSize = linkedSignal(() => String(this.result()?.filters?.pageSize ?? CORE_SEARCH_LIMIT.default));
   readonly selected = signal<number | null>(null);
-  readonly showEditor = computed(() => !this.enabled() || this.selected() !== null);
   readonly appliedNotes = signal<string[]>([]);
   readonly pending = signal(false);
   readonly error = signal('');
+  readonly showEditor = computed(() => !this.enabled() || this.selected() !== null || !!this.error());
+  readonly showFilters = computed(() => this.showEditor() || !!this.result()?.options.length);
   private request?: Subscription;
   private edits = new Map<number, string>();
 
@@ -73,9 +74,6 @@ export class QueryDrafts {
     const result = this.result();
     const option = result?.options[index];
     if (!result || !option) return;
-    if (this.selected() === null) {
-      this.range.set({ from: result.filters?.publishedFrom ?? '', to: result.filters?.publishedTo ?? '' });
-    }
     this.selected.set(index);
     this.query.set(this.edits.get(index) ?? option.expression);
     this.appliedNotes.set(result.unapplied);
@@ -91,13 +89,17 @@ export class QueryDrafts {
       next: (result) => {
         this.pending.set(false);
         this.result.set(result);
+        if (result.options.length) {
+          this.range.set({ from: result.filters?.publishedFrom ?? '', to: result.filters?.publishedTo ?? '' });
+        }
         if (result.options.length === 1) this.choose(0);
       },
       error: (error: HttpErrorResponse) => {
         this.pending.set(false);
-        const message = error.status === 429 ? 'Translation limit reached. Try again in a minute.'
-          : error.status === 504 ? 'Translation timed out. Edit the description to try again.'
-          : 'Could not translate this description. Edit it to try again, or turn off NLP for manual search.';
+        const message = error.status === 429 ? 'Translation limit reached. Try drafting again in a minute.'
+          : error.status === 504 ? 'Translation timed out.'
+          : 'Could not translate this description.';
+        this.appliedNotes.set([]);
         this.error.set(message);
       },
     });

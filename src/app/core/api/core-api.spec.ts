@@ -116,7 +116,7 @@ describe('CORE API HTTP client', () => {
     expect(req.request.body).toEqual(body);
     req.flush(yearBuckets);
     const response = await result;
-    expect(response.aggregations.yearPublished).toEqual({ '2023': 1, '2024': 1 });
+    expect(response.aggregations['yearPublished']).toEqual({ '2023': 1, '2024': 1 });
   });
 
   it('preserves CORE retry guidance for an aggregation quota failure', async () => {

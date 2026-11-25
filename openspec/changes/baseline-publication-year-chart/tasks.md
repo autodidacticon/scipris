@@ -1,5 +1,7 @@
 # Tasks
 
+Historical implementation record. [Selectable Works analytics](../selectable-work-analytics/proposal.md) supersedes the original coverage checks.
+
 Retrospective checklist for the implementation shipped in `5eeaa9b`.
 
 ## 1. Query-wide chart

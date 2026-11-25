@@ -24,7 +24,8 @@ The search menu SHALL place an initially off Natural language search (NLP) switc
 
 #### Scenario: Show help when a researcher opts in
 - **WHEN** the researcher turns the switch on
-- **THEN** the description field has accessible instructions with a plain-language example, automatic translation by OpenRouter, interpretation selection, query editing and the Search papers action
+- **THEN** the description field has accessible instructions with a plain-language example, interpretation selection, query editing and the Search papers action
+- **AND** the example asks for papers from the last decade correlating depression and cardiovascular exercise, grouped by publication year and publisher
 - **AND** turning the switch off hides those instructions and preserves the visible Boolean query
 
 ### Requirement: Debounce description changes
@@ -60,12 +61,12 @@ The translator SHALL offer one labeled draft for a clear request, two or three d
 - **THEN** the UI displays a focused question and allows the researcher to revise and translate their description
 
 ### Requirement: Limit results and filter by publication date
-In NLP mode, the UI SHALL hide the numeric limiter until parsing returns one or more interpretations. It SHALL then show an editable limiter initialized to the requested count or 10 by default. A description MAY specify 1 to 100 papers and either or both inclusive publication dates. Both modes SHALL provide editable date bounds. Only an explicit search SHALL apply the current filters.
+NLP mode SHALL show editable Total results (1–10,000) and Results per page (1–100) when an interpretation is available or the editor opens after a service failure. Each SHALL use the requested count when supplied, defaulting to 100 total and 10 per page. A description MAY supply either or both inclusive publication dates. Both modes SHALL allow date edits and apply filters only on explicit search.
 
 #### Scenario: Describe a limited search
 - **WHEN** a researcher asks for 5 solar papers published from 2020 through 2022
 - **THEN** the Boolean editor contains the topic, the draft shows the limit, and the date controls show January 1, 2020 through December 31, 2022
-- **AND** submission displays up to five papers while the chart counts all matches within the range
+- **AND** submission displays up to five papers and Analytics uses CORE’s aggregate for those years
 
 #### Scenario: Override the interpreted result limit
 - **WHEN** parsing returns multiple interpretations with a common limit of 5 and the researcher changes the field to 7
@@ -74,8 +75,15 @@ In NLP mode, the UI SHALL hide the numeric limiter until parsing returns one or 
 
 #### Scenario: Adjust a publication date
 - **WHEN** the researcher supplies one date bound or edits a proposed range to include only part of a year
-- **THEN** search uses the inclusive bounds for both papers and counts, including matches beyond the first results page
-- **AND** incomplete coverage is identified if paging stops early
+- **THEN** Results uses the inclusive day bounds across raw search pages and Analytics labels the enclosing CORE publication years
+- **AND** Results identifies an interrupted date scan
+
+#### Scenario: Collapse search filters
+- **WHEN** the manual search form is shown or NLP returns interpretations
+- **THEN** a keyboard-operable Search parameters section below the query groups Total results, Results per page and Publication date side by side when space permits
+- **AND** the section starts expanded and retains the researcher's choice when editing a description or choosing an interpretation
+- **WHEN** the researcher submits with filters collapsed
+- **THEN** valid filter values still apply, and an invalid filter reopens the section and receives focus
 
 #### Scenario: Refer to the previous calendar year
 - **WHEN** a researcher asks in 2026 for four heat-pump papers published last year
@@ -89,6 +97,11 @@ In NLP mode, the UI SHALL hide the numeric limiter until parsing returns one or 
 #### Scenario: Use a time window to describe the study population
 - **WHEN** the request describes participants who exercised within the last year and gives no publication dates
 - **THEN** the publication date fields remain empty
+
+#### Scenario: A rolling period is paraphrased in a correlation draft
+- **WHEN** a researcher asks for papers from the last year that correlate depression and cardiovascular exercise, and the provider expresses the period as “within the last year”
+- **THEN** the editor opens with `(depression AND "cardiovascular exercise")` and the inclusive dates cover the twelve months ending on the UTC request date
+- **AND** a provider-supplied rolling duration absent from the request requires clarification
 
 #### Scenario: Correct invalid filters
 - **WHEN** an end date precedes a start date in the picker
@@ -107,9 +120,11 @@ The UI SHALL load selected drafts into the highlighted Boolean editor, retain ed
 - **WHEN** a researcher changes the description after the interpretation dropdown appears
 - **THEN** the old options and inline editor are hidden immediately, submission awaits a current selection, and the last Boolean text stays available in manual mode
 
-#### Scenario: Retry after failure
-- **WHEN** translation fails or times out
-- **THEN** the UI reports the failure, preserves the description and query, and permits retry
+#### Scenario: Search manually after a parsing service failure
+- **WHEN** translation fails, times out, or is rate-limited
+- **THEN** NLP stays enabled and an accessible warning opens alongside the highlighted Boolean editor, preserving the description and any existing Boolean text
+- **AND** the researcher can enter or edit a query, adjust search parameters, and explicitly submit it to CORE
+- **AND** editing the description clears the warning and retries translation after the typing pause
 
 ### Requirement: Bound server-side translation
 The service SHALL validate model output before rendering bounded keyword, phrase, AND, OR, NOT and grouping expressions. It MUST bound input, rate and runtime, keep credentials server-side, and omit raw prompts from routine logs.
@@ -121,3 +136,11 @@ The service SHALL validate model output before rendering bounded keyword, phrase
 #### Scenario: Limit translation work
 - **WHEN** a request exceeds the input or request-rate limit
 - **THEN** the service rejects it before invoking the provider
+
+### Requirement: Interpret analytics dimensions
+Drafting SHALL extract requested CORE groupings separately from paper keywords. Researchers MAY edit the selection before submission. The global analytics switch SHALL govern every aggregate request.
+
+#### Scenario: Group research papers
+- **WHEN** the description requests solar papers grouped by year and publisher
+- **THEN** the draft contains the solar topic and selects Publication year and Publisher
+- **AND** omitted groupings use the existing selection, a request for no analytics clears the selection, and unsupported dimensions are listed as unapplied

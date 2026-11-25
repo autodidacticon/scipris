@@ -40,6 +40,12 @@ paths:
             type: integer
             minimum: 0
             default: 0
+        - name: sort
+          in: query
+          description: Comma-separated FIELD_NAME:asc or FIELD_NAME:desc clauses. The results table orders by yearPublished, then id.
+          schema:
+            type: string
+          example: yearPublished:desc,id:asc
         - name: scroll
           in: query
           description: Set true to start a scroll search. Omit when sending a continuation scrollId.
@@ -91,8 +97,7 @@ paths:
       summary: Group matching works by field
       description: >-
         Send the same query used for the results list. This operation takes no
-        display limit or page offset. Verify bucket limits and missing-value
-        handling before presenting results as a complete distribution.
+        display limit or page offset. Counts describe the buckets CORE returns.
       security:
         - coreBearer: []
       requestBody:
@@ -103,7 +108,7 @@ paths:
               $ref: '#/components/schemas/WorksAggregationRequest'
             example:
               q: (drone AND (package OR delivery))
-              aggregations: [yearPublished]
+              aggregations: [yearPublished, documentType]
       responses:
         '200':
           description: Grouped counts keyed by the requested fields and their bucket values.
@@ -239,26 +244,27 @@ components:
           minItems: 1
           items:
             type: string
-          description: Fields to group by. The CORE Search client uses yearPublished and documentType, among others.
+          description: Works fields to group by in one request.
     WorksAggregationResponse:
       type: object
       required: [aggregations]
       properties:
         aggregations:
           type: object
-          properties:
-            yearPublished:
-              $ref: '#/components/schemas/BucketCounts'
-            documentType:
-              $ref: '#/components/schemas/BucketCounts'
-          additionalProperties: true
+          additionalProperties:
+            $ref: '#/components/schemas/BucketCounts'
     BucketCounts:
-      type: object
-      description: Each property name is a bucket value and its value is the work count.
-      additionalProperties:
-        type: integer
-        format: int64
-        minimum: 0
+      description: Counts keyed by field value. CORE can encode a distribution with no buckets as an empty array.
+      oneOf:
+        - type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+        - type: array
+          maxItems: 0
+          items:
+            type: string
     SearchError:
       type: object
       properties:

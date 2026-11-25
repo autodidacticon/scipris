@@ -12,3 +12,7 @@ Retrospective checklist for the implementation shipped in `5eeaa9b`.
 
 - [x] 2.1 Render responsive paper results with metadata fallbacks and links. Verify with the fixture-based search tests and the production browser smoke check.
 - [x] 2.2 Support Boolean submissions and validate the paper limit. Verify request parameters, visible card count, error states, and superseded requests in `research-search.spec.ts`.
+
+## 3. Subsequent page rename
+
+- [x] 3.1 Set the main heading and browser tab title to “CORE search” and verify both on the search page.
