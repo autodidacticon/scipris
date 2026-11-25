@@ -7,4 +7,4 @@
 - [x] 2.2 Deploy the current app to Railway with server-side credentials and configure scipris.intrepidata.io DNS.
 - [x] 2.3 Verify deployed health, login protection, and origin rejection; document operations and verification limits.
 - [x] 2.4 Authorize Railway GitHub repository access and enable the main deployment trigger.
-- [ ] 2.5 Verify a push deploys its exact commit successfully.
+- [x] 2.5 Verify a push deploys its exact commit successfully. Commit `26690d3` automatically produced successful Railway deployment `e1716f8e-15e1-4172-8c5e-293f7c2c5386`.
