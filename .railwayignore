@@ -2,6 +2,7 @@
 .agents
 .codex
 .env*
+.secrets*
 node_modules
 dist
 .angular

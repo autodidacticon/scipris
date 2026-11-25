@@ -10,7 +10,8 @@ Non-goals: custom account management, database storage, or hosted local CLI draf
 
 ## Decisions
 
-- Use Railpack to build Angular and run a single Node server on PORT. Reuse the existing drafting handler with OpenRouter.
+- Use Railpack to build Angular and run a single Node server on PORT. Reuse the existing drafting handler with OpenRouter. Set RAILPACK_NO_SPA=true to retain the Node runtime and persist build, start, and health settings on the Railway service.
+- Follow main in autodidacticon/scipris for automatic GitHub deployments. Keep the service unpinned so future pushes trigger builds.
 - Configure a reusable Cloudflare Allow policy with email domain and exact email alternatives, requiring the existing one-time PIN identity provider.
 - Validate RS256 signature, issuer, audience, expiry, and required claims through jose and Cloudflare's rotating JWKS. Recheck the explicit email allowlist at the origin. Missing configuration prevents startup.
 - Protect static assets and both API groups; only GET/HEAD /healthz returns an unauthenticated constant health response for Railway.
@@ -19,7 +20,7 @@ Non-goals: custom account management, database storage, or hosted local CLI draf
 
 ## Risks / Trade-offs
 
-Email delivery is required for login. JWKS availability is required when keys are first loaded or rotated. The deployment uses a source snapshot; later changes require another deployment. Railway health checks confirm server readiness without exercising paid upstream APIs.
+Email delivery is required for login. JWKS availability is required when keys are first loaded or rotated. Pushes to main automatically deploy to production after the Railway health check succeeds. Railway health checks confirm server readiness without exercising paid upstream APIs.
 
 ## Migration Plan
 

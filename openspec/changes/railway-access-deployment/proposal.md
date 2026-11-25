@@ -8,6 +8,7 @@ Deploy the current app at scipris.intrepidata.io for Cypris reviewers and Richar
 - Require Cloudflare Access authentication for all application and API requests, allowing cypris.ai addresses and richard.moorhead@gmail.com.
 - Validate signed Access tokens at the origin and expose only a minimal unauthenticated health endpoint.
 - Configure deployment, DNS, and a scoped Cloudflare Access policy with email one-time PIN login.
+- Enable automatic Railway deployments from the GitHub repository's main branch.
 
 ## Capabilities
 

@@ -46,12 +46,22 @@ For full verification, including CORE client regeneration, run `bash scripts/ver
 
 ## Hosted deployment
 
-Serve `dist/scipris/browser/` on the app origin. Proxy `/api/core/search/works/` and `/api/core/search/works/aggregate` to the corresponding `https://api.core.ac.uk/v3/` routes. Set `Authorization: Bearer <CORE_API_KEY>` on upstream requests. [CORE API client guide](docs/api-client.md)
+Production: [scipris.intrepidata.io](https://scipris.intrepidata.io). Railway builds Angular and runs `npm run serve:production`, serving the UI, CORE proxy, and OpenRouter drafting on one origin. [Hosting operations](docs/hosting.md)
 
-For hosted drafting, set `OPENROUTER_API_KEY` in the service environment and start the service.
+Cloudflare Access requires an emailed one-time PIN. Access is limited to `@cypris.ai` and `richard.moorhead@gmail.com`. The server independently validates Cloudflare's signed token and email allowlist on every UI/API request; requests to a direct Railway origin are also protected.
 
-```bash
-NLP_ENABLED=true NLP_PROVIDER=openrouter npm run nlp:serve
+Set the following service environment variables before starting:
+
+```dotenv
+PUBLIC_ORIGIN=https://scipris.intrepidata.io
+CF_ACCESS_TEAM_DOMAIN=intrepidata.cloudflareaccess.com
+CF_ACCESS_AUD=<Access application's audience tag>
+CF_ACCESS_ALLOWED_EMAIL_DOMAINS=cypris.ai
+CF_ACCESS_ALLOWED_EMAILS=richard.moorhead@gmail.com
+CORE_API_KEY=<server-side key>
+NLP_ENABLED=true
+NLP_PROVIDER=openrouter
+OPENROUTER_API_KEY=<server-side key>
 ```
 
-Proxy `GET /api/nlp/status` and `POST /api/nlp/translate` to `127.0.0.1:4318`. Set `NLP_PORT` to override the port. The standalone service reads its configuration from the environment.
+Run `npm run build` followed by `npm run serve:production`. The server listens on `0.0.0.0:$PORT` (default `8080`). Only `GET`/`HEAD /healthz` is unauthenticated, returning a constant readiness response. `.railwayignore` excludes local settings and build caches. Never upload a secrets file or put upstream keys in the Angular build.
