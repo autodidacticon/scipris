@@ -1,0 +1,9 @@
+/node_modules/
+/.env.local
+/dist/
+/.angular/cache/
+/.cache/openapi-generator/
+/coverage/
+*.tsbuildinfo
+npm-debug.log*
+.DS_Store

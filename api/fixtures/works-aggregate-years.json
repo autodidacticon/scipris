@@ -1,0 +1,8 @@
+{
+  "aggregations": {
+    "yearPublished": {
+      "2023": 1,
+      "2024": 1
+    }
+  }
+}

@@ -1,0 +1,16 @@
+:host { display: block; }
+.plot { width: 100%; height: 15rem; }
+p { margin: .25rem 0 .625rem; color: var(--muted); font-size: .875rem; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.distribution-scroll { max-height: 22rem; overflow: auto; margin-top: .75rem; }
+.distribution { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.distribution thead { position: sticky; top: 0; background: #f1f0fa; }
+.distribution th, .distribution td { border-bottom: 1px solid var(--border); padding: .4rem; text-align: start; }
+.distribution tbody th { font-weight: 400; }
+.distribution tr > :last-child { text-align: end; font-variant-numeric: tabular-nums; }
+
+.view-toggle {
+  margin: .5rem 0; padding: .35rem .5rem; min-height: 2.25rem;
+  border: 0; border-radius: .375rem; background: var(--accent); color: white;
+  font: inherit; font-size: .875rem; font-weight: 650; cursor: pointer;
+}

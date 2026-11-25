@@ -1,0 +1,19 @@
+@if (canChart()) {
+  <button type="button" class="view-toggle" [attr.aria-label]="(showChart() ? 'Show table for ' : 'Show bar chart for ') + label()"
+          (click)="view.set(showChart() ? 'table' : 'chart')">{{ showChart() ? 'Show table' : 'Show bar chart' }}</button>
+}
+@if (showChart()) {
+  <div #plot class="plot" role="img" [attr.aria-label]="label() + ' bar chart'"></div>
+  @if (unknown() !== undefined) { <p>Unknown year: {{ unknown() | number }}</p> }
+} @else {
+  <div class="distribution-scroll" tabindex="0" role="region" [attr.aria-label]="label()">
+    <table class="distribution" [class.year-counts]="group().field === 'yearPublished'" [attr.aria-label]="label() + ' counts'">
+      <thead><tr><th scope="col">{{ label() }}</th><th scope="col">Papers</th></tr></thead>
+      <tbody>
+        @for (row of rows(); track row.value) {
+          <tr><th scope="row">{{ row.value }}</th><td>{{ row.count | number }}</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

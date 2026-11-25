@@ -1,0 +1,256 @@
+<form class="search-form" role="search" aria-label="Research papers" novalidate
+      (submit)="submit($event)">
+  <div class="fields">
+    <div>
+      @if (drafts.enabled()) {
+        <label [for]="idPrefix() + '-description'">Describe the papers you want to find</label>
+        <textarea #description [id]="idPrefix() + '-description'" rows="2" maxlength="1000"
+                  [value]="drafts.description()" [attr.aria-describedby]="idPrefix() + '-translate-help'"
+                  (input)="drafts.setDescription(description.value, $event)"
+                  (compositionstart)="drafts.setDescription(description.value, $event)"
+                  (compositionend)="drafts.setDescription(description.value, $event)"></textarea>
+        <p class="query-help draft-help" [id]="idPrefix() + '-translate-help'">
+          Try “Find papers from the last decade correlating depression and cardiovascular exercise, group by publication year and publisher”.
+          If several interpretations fit, choose one. Edit the query if needed, then select <strong>Search papers</strong>.
+        </p>
+        <div role="status" class="draft-status">
+          @if (drafts.pending()) { <p>Finding interpretations…</p> }
+          @else if (drafts.result(); as result) {
+            @if (result.clarification) { <p>{{ result.clarification }}</p> }
+            @else if (result.options.length === 1) {
+              <span class="visually-hidden">Boolean query ready to edit.</span>
+            } @else if (result.options.length > 1 && drafts.selected() === null) {
+              <span class="visually-hidden">{{ result.options.length }} interpretations available. Choose one to edit.</span>
+            }
+          }
+        </div>
+        @if (drafts.error(); as warning) {
+          <p class="draft-warning" role="alert" [id]="idPrefix() + '-draft-warning'">
+            <strong>{{ warning }}</strong> Enter or review the Boolean query below to search. Edit the description to retry.
+          </p>
+        }
+        @if (drafts.result(); as result) {
+          @if (result.options.length > 1) {
+            <label [for]="idPrefix() + '-interpretation'">Interpretation</label>
+            <select #choice [id]="idPrefix() + '-interpretation'" (change)="drafts.choose(+choice.value)">
+              <option value="" disabled [selected]="drafts.selected() === null">Choose an interpretation</option>
+              @for (option of result.options; track $index) {
+                <option [value]="$index" [selected]="drafts.selected() === $index">{{ option.label }}</option>
+              }
+            </select>
+          }
+          @if (drafts.selected() === null && result.unapplied.length) {
+            <p class="draft-note">Outside the proposed search: {{ result.unapplied.join(', ') }}</p>
+          }
+        }
+      }
+      @if (drafts.showEditor()) {
+        <label [for]="idPrefix() + '-query'">{{ drafts.enabled() ? 'Edit Boolean query' : 'Search query' }}</label>
+        <div class="query-field">
+          <div class="query-highlights" aria-hidden="true">
+            <div class="query-highlight-line" [style.left.px]="-queryScroll()" [appQueryHighlight]="drafts.query()"></div>
+          </div>
+          <input #queryInput [id]="idPrefix() + '-query'" type="search" name="query" required
+                 [value]="drafts.query()"
+                 placeholder="Enter keywords or a Boolean query" autocomplete="off"
+                 [attr.aria-invalid]="queryError() || null"
+                 [attr.aria-describedby]="idPrefix() + (drafts.enabled() ? (drafts.error() ? '-draft-warning' : '-translate-help') : '-query-help') + (queryError() ? ' ' + idPrefix() + '-query-error' : '') + (drafts.appliedNotes().length ? ' ' + idPrefix() + '-unapplied' : '')"
+                 (input)="updateQueryHighlight(queryInput)"
+                 (scroll)="queryScroll.set(queryInput.scrollLeft)" />
+        </div>
+        @if (drafts.appliedNotes().length) {
+          <p class="draft-note" [id]="idPrefix() + '-unapplied'">Unapplied in this draft: {{ drafts.appliedNotes().join(', ') }}</p>
+        }
+        @if (queryError()) {
+          <p class="field-error" role="alert" [id]="idPrefix() + '-query-error'">Enter a search query.</p>
+        }
+        @if (!drafts.enabled()) {
+          <p class="query-help" [id]="idPrefix() + '-query-help'">
+            Use <code appQueryHighlight="AND"></code>, <code appQueryHighlight="OR"></code>, or <code appQueryHighlight="NOT"></code>
+            in any case, or use <code appQueryHighlight="&amp;&amp;"></code>, <code appQueryHighlight="||"></code>, or <code appQueryHighlight="!"></code>.
+            Group terms with parentheses, as in <code appQueryHighlight="(drone AND (package OR delivery))"></code>.
+          </p>
+        }
+      }
+    </div>
+    <button type="submit" [disabled]="!drafts.showEditor()">Search papers</button>
+  </div>
+  <details #filters class="search-filters" open [hidden]="!drafts.showFilters()">
+    <summary>Search parameters</summary>
+    @if (drafts.showFilters()) {
+      <div class="filter-fields">
+        <app-publication-date-range [idPrefix]="idPrefix()" [(range)]="drafts.range" />
+        <div class="result-limit">
+          <label [for]="idPrefix() + '-limit'">Total results</label>
+          <input #limitInput [id]="idPrefix() + '-limit'" type="number" name="limit" required step="1"
+                 [min]="limitBounds.min" [max]="limitBounds.max" [value]="limitValue()"
+                 [attr.aria-invalid]="limitError() || null"
+                 [attr.aria-describedby]="limitError() ? idPrefix() + '-limit-error' : idPrefix() + '-limit-help'"
+                 (input)="editLimit(limitInput.value)" />
+          <span [id]="idPrefix() + '-limit-help'" class="visually-hidden">
+            {{ limitBounds.min }} to {{ limitBounds.max }} papers. Apply the limit by submitting your search.
+          </span>
+          @if (limitError()) {
+            <p class="field-error" role="alert" [id]="idPrefix() + '-limit-error'">
+              Enter a whole number from {{ limitBounds.min }} to {{ limitBounds.max }}.
+            </p>
+          }
+        </div>
+        <div class="result-limit">
+          <label [for]="idPrefix() + '-page-size'">Results per page</label>
+          <input #pageSizeInput [id]="idPrefix() + '-page-size'" name="pageSize" type="number" required step="1"
+                 [min]="pageBounds.min" [max]="pageBounds.max" [value]="pageSizeValue()"
+                 [attr.aria-invalid]="pageSizeError() || null" [attr.aria-describedby]="pageSizeError() ? idPrefix() + '-size-error' : null"
+                 (input)="editPageSize(pageSizeInput.value)" />
+          @if (pageSizeError()) {
+            <p class="field-error" role="alert" [id]="idPrefix() + '-size-error'">Enter a whole number from 1 to 100.</p>
+          }
+        </div>
+      </div>
+    }
+  </details>
+  <details class="search-filters aggregate-picker">
+    <summary>Analytics parameters</summary>
+    <button class="analytics-switch" type="button" role="switch" [attr.aria-checked]="analyticsEnabled()"
+            (click)="toggleAnalytics()"><span aria-hidden="true" class="switch-track"></span>Enable analytics</button>
+    <fieldset [disabled]="!analyticsEnabled()">
+      <legend class="visually-hidden">Fields to include in Analytics</legend>
+      <div class="field-choices">
+        @for (field of aggregateFields; track field) {
+          <label><input #choice type="checkbox" [value]="field" [checked]="selectedFields().includes(field)"
+                        (change)="chooseField(field, choice.checked)" />{{ aggregateLabels[field] }}</label>
+        }
+      </div>
+    </fieldset>
+  </details>
+  <div class="draft-panel">
+    <label class="draft-toggle">
+      <input #toggle type="checkbox" role="switch" [checked]="drafts.enabled()" [disabled]="!drafts.available()"
+             [attr.aria-describedby]="drafts.available() === false ? idPrefix() + '-nlp-unavailable' : null"
+             (change)="toggleNlp(toggle.checked)" />
+      Natural language search (NLP)
+    </label>
+    @if (drafts.available() === false) {
+      <p class="query-help" [id]="idPrefix() + '-nlp-unavailable'">Natural language search is unavailable on this server.</p>
+    }
+  </div>
+</form>
+
+<div class="search-output">
+  <div role="tablist" aria-label="Search output" class="output-tabs" (keydown)="tabKey($event, resultsTab, analyticsTab)">
+    <button #resultsTab role="tab" type="button" [id]="idPrefix() + '-results-tab'" [attr.aria-controls]="idPrefix() + '-results-panel'"
+            [attr.aria-selected]="tab() === 'results'" [tabIndex]="tab() === 'results' ? 0 : -1" (click)="tab.set('results')">Results</button>
+    <button #analyticsTab role="tab" type="button" [id]="idPrefix() + '-analytics-tab'" [attr.aria-controls]="idPrefix() + '-analytics-panel'"
+            [attr.aria-selected]="tab() === 'analytics'" [tabIndex]="tab() === 'analytics' ? 0 : -1" (click)="tab.set('analytics')">Analytics</button>
+  </div>
+  <section role="tabpanel" class="results" tabindex="0" [id]="idPrefix() + '-results-panel'"
+           [attr.aria-labelledby]="idPrefix() + '-results-tab'" [hidden]="tab() !== 'results'">
+    @if (state(); as search) {
+      <h2 [id]="idPrefix() + '-results'">Papers</h2>
+      <p class="status" role="status">
+        @switch (search.results.status) {
+          @case ('loading') { Searching CORE for <strong>{{ search.query }}</strong>… }
+          @case ('ready') {
+            @if (search.results.papers.length) {
+              Showing {{ search.results.start + 1 | number }}–{{ search.results.start + search.results.papers.length | number }}
+              of {{ search.results.total | number }} matches{{ search.results.dateNotice ? ' found so far' : '' }} for <strong>{{ search.query }}</strong>.
+              @if (search.results.available < search.results.total) { Browsing the first {{ search.results.available | number }}. }
+            } @else if (search.results.dateNotice) {
+              No matching papers found so far.
+            } @else {
+              No papers found for <strong>{{ search.query }}</strong>.
+            }
+            {{ search.results.dateNotice }}
+            @if (search.results.loadingIndex !== undefined) { Loading page {{ search.results.loadingIndex + 1 }}… }
+          }
+        }
+      </p>
+
+      @switch (search.results.status) {
+        @case ('error') {
+          <p class="notice error" role="alert">
+            Could not load papers for <strong>{{ search.query }}</strong>.
+            {{ search.results.message }} Check your query or try again.
+          </p>
+        }
+        @case ('ready') {
+          @if (search.results.papers.length) {
+            <div class="table-scroll">
+              <table class="paper-table" aria-label="Paper results">
+                <thead>
+                  <tr>
+                    <th scope="col">Title</th>
+                    <th scope="col">Authors</th>
+                    <th scope="col" [attr.aria-sort]="search.results.page.order === 'desc' ? 'descending' : 'ascending'">
+                      <button type="button" class="year-sort" (click)="toggleYearOrder(search.results.page)">
+                        Year published <span aria-hidden="true">{{ search.results.page.order === 'desc' ? '↓' : '↑' }}</span>
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                @for (paper of search.results.papers; track paper.id) {
+                  <tbody appPaperRow [paper]="paper" [idPrefix]="idPrefix()"></tbody>
+                }
+              </table>
+            </div>
+          }
+          @if (search.results.pageError) {
+            <div class="notice error" role="alert">{{ search.results.pageError }} <button type="button" (click)="retryPage()">Retry page</button></div>
+          }
+          @if (search.results.moreDatePages !== undefined) {
+            @if (search.results.moreDatePages || search.results.page.index) {
+              <nav class="date-pager" aria-label="Paper result pages">
+                <button type="button" aria-label="Previous page" [disabled]="!search.results.page.index || search.results.loadingIndex !== undefined"
+                        (click)="goToPage(search.results.page, search.results.page.index - 1)">Previous</button>
+                <span>Page {{ search.results.page.index + 1 }}</span>
+                <button type="button" aria-label="Next page" [disabled]="!search.results.moreDatePages || search.results.loadingIndex !== undefined"
+                        (click)="goToPage(search.results.page, search.results.page.index + 1)">Next</button>
+              </nav>
+            }
+          } @else if (search.results.available > search.results.page.pageSize || search.results.page.index) {
+            <mat-paginator aria-label="Paper result pages" [hidePageSize]="true" [length]="search.results.available"
+                           [pageSize]="search.results.page.pageSize" [pageIndex]="search.results.loadingIndex ?? search.results.page.index"
+                           [disabled]="search.results.loadingIndex !== undefined" (page)="goToPage(search.results.page, $event.pageIndex)" />
+          }
+        }
+      }
+    } @else {
+      <p class="status">Submit a search to see matching papers.</p>
+    }
+  </section>
+  <section role="tabpanel" class="analytics" tabindex="0" [id]="idPrefix() + '-analytics-panel'"
+           [attr.aria-labelledby]="idPrefix() + '-analytics-tab'" [hidden]="tab() !== 'analytics'">
+    @if (state(); as search) {
+      <h2>Analytics for {{ search.query }}</h2>
+      @if (search.analytics.status !== 'disabled' && search.bounds; as bounds) {
+        <p class="status">CORE groups by full publication years ({{ bounds.first }}–{{ bounds.last }}). Results uses your exact dates.</p>
+      }
+      @switch (search.analytics.status) {
+        @case ('disabled') { <p class="status">{{ analyticsEnabled() ? 'Submit the search to load analytics.' : 'Analytics is off.' }}</p> }
+        @case ('loading') { <p class="status" role="status">Loading analytics…</p> }
+        @case ('error') { <p class="notice error" role="alert">Could not load analytics. {{ search.analytics.message }}</p> }
+        @case ('ready') {
+          <div class="analytics-grid">
+            @for (group of search.analytics.groups; track group.field) {
+              <article class="chart">
+                <h3>{{ aggregateLabels[group.field] }}</h3>
+                @if (!group.buckets.length) {
+                  <p class="status">CORE returned no buckets for this field.</p>
+                } @else {
+                  <app-work-distribution [group]="group" [canSelect]="drafts.showFilters()"
+                                         (rangeSelected)="setPublicationRange($event)" />
+                }
+              </article>
+            } @empty {
+              <p class="status">Select an aggregation field and submit the search to see analytics.</p>
+            }
+          </div>
+        }
+      }
+    } @else if (!analyticsEnabled()) {
+      <p class="status">Analytics is off.</p>
+    } @else {
+      <p class="status">Submit a search to see its analytics.</p>
+    }
+  </section>
+</div>

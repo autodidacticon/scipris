@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: CORE v3 works search (Scipris subset)
+  version: 3.0.0
+  description: >-
+    Application-maintained subset for CORE Works search and query aggregation.
+    See core-api.md for sources, access limitations, and the behavior that still
+    needs verification. The model for grouped counts follows CORE Search's
+    public client source.
+externalDocs:
+  description: CORE API v3 reference
+  url: https://api.core.ac.uk/docs/v3
+servers:
+  - url: https://api.core.ac.uk/v3
+tags:
+  - name: Works
+paths:
+  /search/works/:
+    get:
+      tags: [Works]
+      operationId: searchWorks
+      summary: Search deduplicated research works
+      security:
+        - coreBearer: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - name: limit
+          in: query
+          description: Maximum number of works to return on this page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: offset
+          in: query
+          description: Zero-based offset. Keep offset plus limit within the 10,000-work result window.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: sort
+          in: query
+          description: Comma-separated FIELD_NAME:asc or FIELD_NAME:desc clauses. The results table orders by yearPublished, then id.
+          schema:
+            type: string
+          example: yearPublished:desc,id:asc
+        - name: scroll
+          in: query
+          description: Set true to start a scroll search. Omit when sending a continuation scrollId.
+          schema:
+            type: boolean
+            default: false
+        - name: scrollId
+          in: query
+          description: Opaque cursor from the previous response. Reuse the original query and page size, and omit offset.
+          schema:
+            type: string
+        - name: exclude
+          in: query
+          description: Field to leave out of the response. The CORE example uses fullText for metadata-only searches.
+          schema:
+            type: string
+          example: fullText
+      responses:
+        '200':
+          description: Matching works. A search with no matches returns an empty results array.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorksSearchResponse'
+              examples:
+                firstPage:
+                  externalValue: ./fixtures/works-first-page.json
+                lastPage:
+                  externalValue: ./fixtures/works-last-page.json
+                noMatches:
+                  externalValue: ./fixtures/works-empty.json
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          description: Search failed. A CORE response for a malformed query has also been observed with this status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchError'
+              examples:
+                queryFailure:
+                  externalValue: ./fixtures/works-error.json
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+  /search/works/aggregate:
+    post:
+      tags: [Works]
+      operationId: aggregateWorks
+      summary: Group matching works by field
+      description: >-
+        Send the same query used for the results list. This operation takes no
+        display limit or page offset. Counts describe the buckets CORE returns.
+      security:
+        - coreBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorksAggregationRequest'
+            example:
+              q: (drone AND (package OR delivery))
+              aggregations: [yearPublished, documentType]
+      responses:
+        '200':
+          description: Grouped counts keyed by the requested fields and their bucket values.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorksAggregationResponse'
+              examples:
+                publicationYears:
+                  externalValue: ./fixtures/works-aggregate-years.json
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+components:
+  securitySchemes:
+    coreBearer:
+      type: http
+      scheme: bearer
+      description: Register for a CORE API key and send it as a Bearer token from the server.
+  parameters:
+    Query:
+      name: q
+      in: query
+      required: true
+      description: >-
+        CORE query string. Use uppercase AND and OR, parentheses for grouping,
+        and double quotes for phrases. URL-encode the complete value once.
+      schema:
+        type: string
+        minLength: 1
+      example: (drone AND (package OR delivery))
+  responses:
+    RateLimited:
+      description: CORE request quota exceeded. The response body format is unverified.
+      headers:
+        X-RateLimit-Retry-After:
+          description: Retry time when supplied by CORE. The CORE example parses it as a timestamp.
+          schema:
+            type: string
+    UnexpectedError:
+      description: Other upstream failure. The operation-specific error list and body formats are unverified.
+  schemas:
+    WorksSearchResponse:
+      type: object
+      required: [totalHits, results]
+      properties:
+        totalHits:
+          type: integer
+          format: int64
+          minimum: 0
+          description: CORE's reported match count. The count can exceed the number of works reachable with offset pagination.
+        limit:
+          description: Echoed page size. Captured responses include both integers and numeric strings.
+          oneOf:
+            - type: integer
+            - type: string
+              pattern: '^[0-9]+$'
+        offset:
+          type: integer
+          minimum: 0
+        scrollId:
+          type: string
+          nullable: true
+          description: Opaque cursor when supplied for scroll pagination.
+        searchId:
+          type: string
+          description: Search identifier present in some responses.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Work'
+    Work:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: CORE work identifier.
+        title:
+          type: string
+          nullable: true
+        authors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Author'
+        abstract:
+          type: string
+          nullable: true
+        doi:
+          type: string
+          nullable: true
+        yearPublished:
+          type: integer
+          nullable: true
+        publishedDate:
+          type: string
+          nullable: true
+        documentType:
+          type: string
+          nullable: true
+        downloadUrl:
+          type: string
+          nullable: true
+          description: Full-text download link when available. May be an empty string.
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkLink'
+    Author:
+      type: object
+      properties:
+        name:
+          type: string
+    WorkLink:
+      type: object
+      properties:
+        type:
+          type: string
+        url:
+          type: string
+    WorksAggregationRequest:
+      type: object
+      required: [q, aggregations]
+      properties:
+        q:
+          type: string
+          minLength: 1
+          description: CORE query string, sent as plain text inside the JSON body.
+        aggregations:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          description: Works fields to group by in one request.
+    WorksAggregationResponse:
+      type: object
+      required: [aggregations]
+      properties:
+        aggregations:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/BucketCounts'
+    BucketCounts:
+      description: Counts keyed by field value. CORE can encode a distribution with no buckets as an empty array.
+      oneOf:
+        - type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+        - type: array
+          maxItems: 0
+          items:
+            type: string
+    SearchError:
+      type: object
+      properties:
+        message:
+          type: string
