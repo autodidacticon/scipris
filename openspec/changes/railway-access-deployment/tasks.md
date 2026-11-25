@@ -6,4 +6,5 @@
 - [x] 2.1 Configure Cloudflare Access for the configured email domains and individual addresses with one-time PIN login.
 - [x] 2.2 Deploy the current app to Railway with server-side credentials and configure scipris.intrepidata.io DNS.
 - [x] 2.3 Verify deployed health, login protection, and origin rejection; document operations and verification limits.
-- [ ] 2.4 Authorize Railway GitHub repository access, enable the main deployment trigger, and verify a push deploys its exact commit successfully.
+- [x] 2.4 Authorize Railway GitHub repository access and enable the main deployment trigger.
+- [ ] 2.5 Verify a push deploys its exact commit successfully.
